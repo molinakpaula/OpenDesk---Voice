@@ -162,6 +162,8 @@ quality problem. This is a support-routing signal, not an admission of liability
   Lima working-hours checks consistently across platforms.
 - `.gitignore` prevents virtual environments, environment secrets, editor
   settings, and generated Python cache files from being committed.
+- `render.yaml` describes a reproducible Render web service and uses `/health`
+  to decide whether a deployment is ready.
 
 ## Set up on Windows
 
@@ -203,6 +205,31 @@ python -m uvicorn main:app --reload
 In `main:app`, `main` means `main.py`, and `app` is the FastAPI application
 inside that file. Visit <http://127.0.0.1:8000/docs> to try each endpoint in a
 browser.
+
+## Deploy on Render
+
+Render is the recommended host for the first public demonstration because it can
+deploy FastAPI directly from GitHub, provide an HTTPS address, and check
+`/health` before treating a deployment as healthy. The repository's
+`render.yaml` contains the build command, production start command, environment
+name, log level, and health-check path.
+
+To deploy:
+
+1. Create or sign in to a Render account.
+2. Connect the GitHub repository.
+3. Create a new Blueprint and select this repository.
+4. Review the proposed `maderaflow-voice-support` web service.
+5. Deploy it, then test `/health`, `/voice-agent-config`, and `/docs` at the
+   assigned HTTPS address.
+
+The Blueprint selects Render's free plan for a demonstration. Free services can
+sleep while idle, causing a slow first response. Use an always-on paid service
+before a scheduled voice-agent review where latency matters.
+
+Application logs contain only the HTTP method, route template, response status,
+duration, and environment. They intentionally omit request bodies, query
+strings, caller IDs, and lot IDs.
 
 ## Run the automated tests
 

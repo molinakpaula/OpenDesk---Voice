@@ -1,16 +1,23 @@
 """Configurable fictional API for MaderaFlow wood-drying voice support."""
 
 import json
+import logging
+import os
 from datetime import datetime, time
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 
 CONFIG_PATH = Path(__file__).parent / "config" / "maderaflow.json"
+APP_ENV = os.getenv("APP_ENV", "development")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
+REQUEST_LOGGER = logging.getLogger("maderaflow.requests")
 SUPPORTED_CALLER_TYPES = {"buyer", "supplier", "transport_partner"}
 SUPPORTED_LANGUAGE_CODES = {"en", "es", "pt"}
 REQUIRED_CONFIG_SECTIONS = {
@@ -143,6 +150,25 @@ app = FastAPI(
     ),
     version="0.3.0",
 )
+
+
+@app.middleware("http")
+async def log_request_metadata(request: Request, call_next):
+    """Log safe request metadata without IDs, query strings, or request bodies."""
+    started_at = perf_counter()
+    response = await call_next(request)
+    route = request.scope.get("route")
+    route_template = getattr(route, "path", "unmatched_route")
+    duration_ms = round((perf_counter() - started_at) * 1000, 2)
+    REQUEST_LOGGER.info(
+        "method=%s route=%s status=%s duration_ms=%s environment=%s",
+        request.method,
+        route_template,
+        response.status_code,
+        duration_ms,
+        APP_ENV,
+    )
+    return response
 
 
 def _find_caller(caller_id: str) -> dict[str, Any]:

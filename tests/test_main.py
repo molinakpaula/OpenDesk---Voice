@@ -4,6 +4,7 @@ import asyncio
 import json
 import unittest
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 from unittest.mock import patch
@@ -83,6 +84,24 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertEqual(body, {"status": "ok"})
+
+    def test_request_logs_exclude_caller_and_lot_ids(self) -> None:
+        with self.assertLogs("maderaflow.requests", level="INFO") as captured:
+            status, _ = self.get("/lots/MF-204?caller_id=US-BUYER-001")
+
+        log_output = " ".join(captured.output)
+        self.assertEqual(status, 200)
+        self.assertIn("route=/lots/{lot_id}", log_output)
+        self.assertNotIn("MF-204", log_output)
+        self.assertNotIn("US-BUYER-001", log_output)
+        self.assertNotIn("caller_id", log_output)
+
+    def test_render_blueprint_uses_health_check_and_dynamic_port(self) -> None:
+        blueprint = Path("render.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("buildCommand: pip install -r requirements.txt", blueprint)
+        self.assertIn("--host 0.0.0.0 --port $PORT", blueprint)
+        self.assertIn("healthCheckPath: /health", blueprint)
 
     def test_organization_endpoint(self) -> None:
         status, body = self.get("/organization")
