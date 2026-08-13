@@ -41,6 +41,7 @@ Method and path:
 ```http
 POST /support-requests
 Content-Type: application/json
+Authorization: Bearer <secret stored in ElevenLabs>
 ```
 
 Input schema:
@@ -73,6 +74,19 @@ Input schema:
 The voice layer should speak `spoken_message` exactly as the authoritative
 operational answer. Structured fields are for control flow and display, not for
 inventing extra spoken details.
+
+## Bearer-token setup
+
+The operational endpoint requires one shared secret. Never put its value in
+this repository, a prompt, a conversation, or a support message.
+
+1. Generate a random token locally.
+2. Add it to Render as `MADERAFLOW_TOOL_TOKEN`.
+3. In the ElevenLabs webhook tool, add the `Authorization` header, select
+   **Secret**, and store the value as `Bearer <your token>`.
+
+The same token value must be used on both sides. Public endpoints such as
+`/health` and `/voice-agent-config` do not require it.
 
 ## Intent and role mapping
 

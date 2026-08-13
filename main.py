@@ -3,13 +3,14 @@
 import json
 import logging
 import os
+import secrets
 from datetime import datetime, time
 from pathlib import Path
 from time import perf_counter
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 
 
@@ -17,6 +18,7 @@ CONFIG_PATH = Path(__file__).parent / "config" / "maderaflow.json"
 APP_ENV = os.getenv("APP_ENV", "development")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+MADERAFLOW_TOOL_TOKEN = os.getenv("MADERAFLOW_TOOL_TOKEN")
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 REQUEST_LOGGER = logging.getLogger("maderaflow.requests")
 SUPPORTED_CALLER_TYPES = {"buyer", "supplier", "transport_partner"}
@@ -381,6 +383,28 @@ def _fallback_response(language: str, reason: str) -> dict[str, Any]:
     }
 
 
+def _require_tool_token(authorization: str | None = Header(default=None)) -> None:
+    """Require the shared bearer token without logging or returning its value."""
+    if not MADERAFLOW_TOOL_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="The support tool is not configured on this server.",
+        )
+
+    scheme, separator, provided_token = (authorization or "").partition(" ")
+    valid_scheme = separator == " " and scheme.lower() == "bearer"
+    valid_token = valid_scheme and secrets.compare_digest(
+        provided_token,
+        MADERAFLOW_TOOL_TOKEN,
+    )
+    if not valid_token:
+        raise HTTPException(
+            status_code=401,
+            detail="A valid bearer token is required for this support tool.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 def _support_request_response(request: SupportRequest) -> dict[str, Any]:
     caller = _find_caller(request.caller_id)
     lot = _find_lot(request.lot_id)
@@ -472,6 +496,11 @@ def get_voice_agent_config() -> dict[str, Any]:
             "method": "POST",
             "path": "/support-requests",
             "url": f"{PUBLIC_BASE_URL}/support-requests",
+            "authentication": {
+                "type": "bearer",
+                "header": "Authorization",
+                "secret_required": True,
+            },
             "required_fields": ["caller_id", "lot_id", "intent"],
         },
         "support_hours": {
@@ -527,6 +556,9 @@ def get_lot(lot_id: str, caller_id: str) -> dict[str, Any]:
 
 
 @app.post("/support-requests")
-def create_support_response(request: SupportRequest) -> dict[str, Any]:
+def create_support_response(
+    request: SupportRequest,
+    _authorized: None = Depends(_require_tool_token),
+) -> dict[str, Any]:
     """Resolve one voice-ready fictional request or recommend safe follow-up."""
     return _support_request_response(request)

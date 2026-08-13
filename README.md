@@ -237,6 +237,30 @@ Application logs contain only the HTTP method, route template, response status,
 duration, and environment. They intentionally omit request bodies, query
 strings, caller IDs, and lot IDs.
 
+## Protect the support tool
+
+`POST /support-requests` requires an `Authorization: Bearer ...` header. Public
+information endpoints remain open. The secret itself must never be committed.
+
+Generate a 256-bit token in PowerShell:
+
+```powershell
+[Convert]::ToBase64String(
+  [Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+)
+```
+
+Copy the result directly into these two private settings:
+
+1. In Render, open the service's **Environment** page and add
+   `MADERAFLOW_TOOL_TOKEN` with the generated token as its value.
+2. In the ElevenLabs webhook tool, add an `Authorization` header, choose the
+   secret-value option, and store `Bearer ` followed by the same token.
+
+Do not paste the token into chat, source code, documentation, or GitHub. A
+missing server secret returns `503`; a missing or incorrect request token
+returns `401`.
+
 ## Run the automated tests
 
 ```powershell

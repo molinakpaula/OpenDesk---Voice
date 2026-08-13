@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,8 @@ from urllib.parse import urlsplit
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+os.environ.setdefault("MADERAFLOW_TOOL_TOKEN", "test-only-token")
+
 from main import LOTS, app
 
 
@@ -17,6 +20,7 @@ async def request(
     url: str,
     method: str = "GET",
     json_body: dict[str, str] | None = None,
+    headers: list[tuple[bytes, bytes]] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Send one GET request directly through the ASGI application."""
     parsed_url = urlsplit(url)
@@ -48,11 +52,8 @@ async def request(
         "raw_path": parsed_url.path.encode("ascii"),
         "query_string": parsed_url.query.encode("ascii"),
         "root_path": "",
-        "headers": (
-            [(b"content-type", b"application/json")]
-            if json_body is not None
-            else []
-        ),
+        "headers": ([(b"content-type", b"application/json")] if json_body is not None else [])
+        + (headers or []),
         "client": ("test-client", 1234),
         "server": ("test-server", 80),
     }
@@ -77,6 +78,20 @@ class ApiTests(unittest.TestCase):
         return asyncio.run(request(url))
 
     def post(self, url: str, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
+        return asyncio.run(
+            request(
+                url,
+                method="POST",
+                json_body=body,
+                headers=[(b"authorization", b"Bearer test-only-token")],
+            )
+        )
+
+    def post_without_token(
+        self,
+        url: str,
+        body: dict[str, str],
+    ) -> tuple[int, dict[str, Any]]:
         return asyncio.run(request(url, method="POST", json_body=body))
 
     def test_health_endpoint(self) -> None:
@@ -102,6 +117,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("buildCommand: pip install -r requirements.txt", blueprint)
         self.assertIn("--host 0.0.0.0 --port $PORT", blueprint)
         self.assertIn("healthCheckPath: /health", blueprint)
+        self.assertIn("key: MADERAFLOW_TOOL_TOKEN", blueprint)
+        self.assertIn("sync: false", blueprint)
 
     def test_organization_endpoint(self) -> None:
         status, body = self.get("/organization")
@@ -124,6 +141,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("automatizada", body["agent"]["opening_messages"]["pt"])
         self.assertEqual(body["tool"]["method"], "POST")
         self.assertEqual(body["tool"]["path"], "/support-requests")
+        self.assertEqual(body["tool"]["authentication"]["type"], "bearer")
+        self.assertTrue(body["tool"]["authentication"]["secret_required"])
         self.assertEqual(
             body["tool"]["url"],
             "http://127.0.0.1:8000/support-requests",
@@ -294,6 +313,44 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(body["intent"], intent)
                 self.assertTrue(body["spoken_message"])
                 self.assertFalse(body["ticket_created"])
+
+    def test_support_endpoint_requires_bearer_token(self) -> None:
+        request_body = {
+            "caller_id": "US-BUYER-001",
+            "lot_id": "MF-204",
+            "intent": "check_lot_status",
+        }
+
+        missing_status, missing_body = self.post_without_token(
+            "/support-requests",
+            request_body,
+        )
+        wrong_status, wrong_body = asyncio.run(
+            request(
+                "/support-requests",
+                method="POST",
+                json_body=request_body,
+                headers=[(b"authorization", b"Bearer incorrect-token")],
+            )
+        )
+
+        self.assertEqual(missing_status, 401)
+        self.assertEqual(wrong_status, 401)
+        self.assertIn("valid bearer token", missing_body["detail"])
+        self.assertIn("valid bearer token", wrong_body["detail"])
+
+    def test_support_endpoint_fails_closed_without_server_secret(self) -> None:
+        request_body = {
+            "caller_id": "US-BUYER-001",
+            "lot_id": "MF-204",
+            "intent": "check_lot_status",
+        }
+
+        with patch("main.MADERAFLOW_TOOL_TOKEN", None):
+            status, body = self.post("/support-requests", request_body)
+
+        self.assertEqual(status, 503)
+        self.assertIn("not configured", body["detail"])
 
     def test_unresolved_request_recommends_human_during_working_hours(self) -> None:
         working_time = datetime(2026, 8, 13, 10, 0, tzinfo=ZoneInfo("America/Lima"))
