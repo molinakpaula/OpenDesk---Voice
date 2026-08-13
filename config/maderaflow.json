@@ -10,6 +10,10 @@
       "pt": "Portuguese"
     }
   },
+  "voice_agent": {
+    "name": "MaderaFlow Support",
+    "automated_assistant": true
+  },
   "callers": {
     "us-buyer-001": {
       "caller_id": "US-BUYER-001",

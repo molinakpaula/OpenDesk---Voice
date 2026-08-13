@@ -93,6 +93,37 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(body["headquarters"], "Puerto Maldonado, Peru")
         self.assertEqual(set(body["supported_languages"]), {"en", "es", "pt"})
 
+    def test_voice_agent_config_exposes_public_contract(self) -> None:
+        status, body = self.get("/voice-agent-config")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["agent"]["name"], "MaderaFlow Support")
+        self.assertTrue(body["agent"]["automated_assistant"])
+        self.assertEqual(set(body["agent"]["opening_messages"]), {"en", "es", "pt"})
+        self.assertIn("automated voice assistant", body["agent"]["opening_messages"]["en"])
+        self.assertIn("automatizado", body["agent"]["opening_messages"]["es"])
+        self.assertIn("automatizada", body["agent"]["opening_messages"]["pt"])
+        self.assertEqual(body["tool"]["method"], "POST")
+        self.assertEqual(body["tool"]["path"], "/support-requests")
+        self.assertEqual(
+            body["tool"]["required_fields"],
+            ["caller_id", "lot_id", "intent"],
+        )
+
+    def test_voice_agent_config_does_not_expose_caller_or_lot_records(self) -> None:
+        status, body = self.get("/voice-agent-config")
+        serialized_body = json.dumps(body).lower()
+
+        self.assertEqual(status, 200)
+        self.assertNotIn("callers", body)
+        self.assertNotIn("lots", body)
+        self.assertNotIn("us-buyer-001", serialized_body)
+        self.assertNotIn("pe-supplier-001", serialized_body)
+        self.assertNotIn("br-logistics-001", serialized_body)
+        self.assertNotIn("mf-204", serialized_body)
+        self.assertNotIn("12.8", serialized_body)
+        self.assertNotIn("houston", serialized_body)
+
     def test_configured_lots_contain_required_operational_fields(self) -> None:
         required_fields = {
             "species",

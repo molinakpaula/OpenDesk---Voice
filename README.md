@@ -55,6 +55,8 @@ information. A `GET` request retrieves information without changing it.
 
 - `GET /health` confirms that the backend can respond.
 - `GET /organization` returns the fictional organization and languages.
+- `GET /voice-agent-config` returns a public, non-sensitive contract for a
+  future voice layer.
 - `GET /callers/{caller_id}` returns one fictional caller profile.
 - `GET /lots/{lot_id}?caller_id={caller_id}` returns a role- and
   language-specific lot response.
@@ -151,6 +153,8 @@ quality problem. This is a support-routing signal, not an admission of liability
 - `config/maderaflow.json` contains editable fictional organization, caller,
   lot, escalation, and support-hours data. Keeping these facts outside Python
   makes the business context configurable without changing application logic.
+- `docs/elevenlabs-integration-contract.md` documents the future voice tool,
+  conversation flow, safety rules, and multilingual examples for reviewers.
 - `tests/test_main.py` sends automated requests through the application and
   checks successful responses, errors, language selection, role-specific
   content, escalation, and confidentiality boundaries.
@@ -227,3 +231,7 @@ language. A future integration can speak that message while keeping business
 rules, role filtering, and fictional lot context inside this backend. Twilio,
 Supabase, authentication, and real customer data are also outside this
 milestone.
+
+See `docs/elevenlabs-integration-contract.md` for the reviewer-facing tool
+schema, intent mapping, handoff behavior, and English, Spanish, and Portuguese
+conversation examples.

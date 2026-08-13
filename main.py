@@ -15,6 +15,7 @@ SUPPORTED_CALLER_TYPES = {"buyer", "supplier", "transport_partner"}
 SUPPORTED_LANGUAGE_CODES = {"en", "es", "pt"}
 REQUIRED_CONFIG_SECTIONS = {
     "organization",
+    "voice_agent",
     "callers",
     "lots",
     "escalation_triggers",
@@ -60,6 +61,7 @@ def _load_configuration() -> dict[str, Any]:
 
 CONFIG = _load_configuration()
 ORGANIZATION = CONFIG["organization"]
+VOICE_AGENT = CONFIG["voice_agent"]
 CALLERS = CONFIG["callers"]
 LOTS = CONFIG["lots"]
 ESCALATION_TRIGGERS = CONFIG["escalation_triggers"]
@@ -105,6 +107,27 @@ LABELS = {
     },
     "none": {"en": "none", "es": "ninguna", "pt": "nenhuma"},
 }
+
+OPENING_MESSAGES = {
+    "en": "Hello, you have reached MaderaFlow Support, an automated voice assistant. How can I help with your fictional wood lot today?",
+    "es": "Hola, ha contactado con MaderaFlow Support, un asistente de voz automatizado. ¿Cómo puedo ayudarle hoy con su lote de madera ficticio?",
+    "pt": "Olá, você entrou em contato com a MaderaFlow Support, uma assistente de voz automatizada. Como posso ajudar hoje com seu lote de madeira fictício?",
+}
+
+SUPPORTED_INTENTS = {
+    "check_lot_status": "buyer",
+    "check_documentation": "supplier",
+    "check_transport_readiness": "transport_partner",
+}
+
+SAFETY_BOUNDARIES = [
+    "Use only fixed fictional lot records returned by the API.",
+    "Never invent or describe a measurement as live.",
+    "Never guarantee an estimated completion date.",
+    "Do not give legal or customs advice.",
+    "Do not admit liability.",
+    "Return only information relevant to the caller's role.",
+]
 
 
 def _label(value: str, language: str) -> str:
@@ -335,12 +358,8 @@ def _support_request_response(request: SupportRequest) -> dict[str, Any]:
     caller = _find_caller(request.caller_id)
     lot = _find_lot(request.lot_id)
     language = caller["preferred_language"]["code"]
-    allowed_intent_by_role = {
-        "buyer": "check_lot_status",
-        "supplier": "check_documentation",
-        "transport_partner": "check_transport_readiness",
-    }
-    supported_intents = set(allowed_intent_by_role.values())
+    allowed_intent_by_role = {role: intent for intent, role in SUPPORTED_INTENTS.items()}
+    supported_intents = set(SUPPORTED_INTENTS)
 
     if request.intent not in supported_intents:
         fallback = _fallback_response(language, "unsupported_intent")
@@ -400,6 +419,48 @@ def get_health() -> dict[str, str]:
 def get_organization() -> dict[str, Any]:
     """Return public information about the fictional organization."""
     return ORGANIZATION
+
+
+@app.get("/voice-agent-config")
+def get_voice_agent_config() -> dict[str, Any]:
+    """Return a public allow-listed contract for a future voice integration."""
+    return {
+        "agent": {
+            "name": VOICE_AGENT["name"],
+            "automated_assistant": VOICE_AGENT["automated_assistant"],
+            "opening_messages": OPENING_MESSAGES,
+        },
+        "organization": {
+            "name": ORGANIZATION["name"],
+            "industry": ORGANIZATION["industry"],
+            "headquarters": ORGANIZATION["headquarters"],
+            "fictional": ORGANIZATION["fictional"],
+        },
+        "supported_languages": ORGANIZATION["supported_languages"],
+        "supported_intents": [
+            {"name": intent, "allowed_caller_type": role}
+            for intent, role in SUPPORTED_INTENTS.items()
+        ],
+        "tool": {
+            "method": "POST",
+            "path": "/support-requests",
+            "required_fields": ["caller_id", "lot_id", "intent"],
+        },
+        "support_hours": {
+            "timezone": SUPPORT_HOURS["timezone"],
+            "working_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+            "opens_at": SUPPORT_HOURS["opens_at"],
+            "closes_at": SUPPORT_HOURS["closes_at"],
+            "holidays_modeled": SUPPORT_HOURS["holidays_modeled"],
+        },
+        "unresolved_request_routing": {
+            "during_support_hours": "human_handoff",
+            "outside_support_hours": "open_ticket_recommended",
+            "creates_real_ticket": False,
+        },
+        "safety_boundaries": SAFETY_BOUNDARIES,
+        "data_notice": "Every organization, caller, and lot in this API is fictional.",
+    }
 
 
 @app.get("/callers/{caller_id}")
