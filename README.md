@@ -7,6 +7,19 @@ information for `vpn`, `email`, and `identity`.
 It does not connect to ElevenLabs, ServiceNow, OpenAI, or any real company or
 employee data.
 
+## Architecture
+
+The planned request flow is:
+
+```text
+Caller -> ElevenLabs voice layer -> OpenDesk FastAPI -> fictional service status
+```
+
+This repository currently contains only the OpenDesk FastAPI component. A future
+voice layer can turn speech into a service name, request an endpoint such as
+`/outages/email`, and speak the returned message. No ElevenLabs credentials or
+API calls are included in this milestone.
+
 ## What is an API endpoint?
 
 An API endpoint is an address that another program can call to request data or
@@ -21,6 +34,8 @@ JSON, a structured text format that programs can easily read.
 - `requirements.txt` lists the Python packages needed to run the backend.
 - `.gitignore` prevents the local virtual environment, secret environment
   settings, and generated Python cache files from being committed to Git.
+- `tests/test_main.py` checks successful and error responses using Python's
+  built-in test tools.
 
 ## Set up the backend on Windows
 
@@ -62,6 +77,18 @@ Keep the server running and open these addresses in a browser:
 The first four API requests should return JSON successfully. The unknown
 service example should return HTTP status `404 Not Found` with a message listing
 the supported services.
+
+## Run the automated tests
+
+With the virtual environment activated, run:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+The tests send requests through the FastAPI application without opening a
+network port. They verify the health check, every supported service,
+case-insensitive service names, and the `404` response for an unknown service.
 
 ## Future voice-agent connection
 

@@ -4,7 +4,9 @@
 # Environment variables and secrets
 .env
 
+# Local editor settings
+.vscode/
+
 # Python-generated cache files
 __pycache__/
 *.py[cod]
-
