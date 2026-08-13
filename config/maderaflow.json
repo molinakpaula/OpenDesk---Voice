@@ -1,0 +1,118 @@
+{
+  "organization": {
+    "name": "MaderaFlow",
+    "fictional": true,
+    "industry": "Wood drying and cross-border logistics coordination",
+    "headquarters": "Puerto Maldonado, Peru",
+    "supported_languages": {
+      "en": "English",
+      "es": "Spanish",
+      "pt": "Portuguese"
+    }
+  },
+  "callers": {
+    "us-buyer-001": {
+      "caller_id": "US-BUYER-001",
+      "fictional": true,
+      "location": "Houston, United States",
+      "department": "Procurement",
+      "caller_type": "buyer",
+      "preferred_language": {
+        "code": "en",
+        "name": "English"
+      },
+      "support_priority": "high",
+      "unit_system": "US customary"
+    },
+    "pe-supplier-001": {
+      "caller_id": "PE-SUPPLIER-001",
+      "fictional": true,
+      "location": "Puerto Maldonado, Peru",
+      "department": "Supplier Operations",
+      "caller_type": "supplier",
+      "preferred_language": {
+        "code": "es",
+        "name": "Spanish"
+      },
+      "support_priority": "normal",
+      "unit_system": "metric"
+    },
+    "br-logistics-001": {
+      "caller_id": "BR-LOGISTICS-001",
+      "fictional": true,
+      "location": "Rio Branco, Brazil",
+      "department": "Logistics",
+      "caller_type": "transport_partner",
+      "preferred_language": {
+        "code": "pt",
+        "name": "Portuguese"
+      },
+      "support_priority": "normal",
+      "unit_system": "metric"
+    }
+  },
+  "lots": {
+    "mf-204": {
+      "lot_id": "MF-204",
+      "fictional": true,
+      "species": "Peruvian walnut",
+      "volume_board_feet": 18000,
+      "current_moisture_percentage": 12.8,
+      "target_moisture_percentage": 10.0,
+      "drying_status": "drying_on_schedule",
+      "estimated_completion_date": "2026-08-20",
+      "required_date": "2026-08-25",
+      "destination": "Houston, United States",
+      "documentation_status": "complete",
+      "transport_readiness": "not_ready",
+      "received": true,
+      "supplier_action_required": false,
+      "supplier_action": "none",
+      "quality_problem_recorded": false,
+      "near_required_date": false
+    },
+    "mf-317": {
+      "lot_id": "MF-317",
+      "fictional": true,
+      "species": "Spanish cedar",
+      "volume_board_feet": 12500,
+      "current_moisture_percentage": 18.4,
+      "target_moisture_percentage": 12.0,
+      "drying_status": "delayed",
+      "estimated_completion_date": "2026-08-29",
+      "required_date": "2026-08-24",
+      "destination": "Miami, United States",
+      "documentation_status": "supplier_documents_pending",
+      "transport_readiness": "not_ready",
+      "received": true,
+      "supplier_action_required": true,
+      "supplier_action": "submit_missing_origin_document",
+      "quality_problem_recorded": false,
+      "near_required_date": true
+    },
+    "mf-422": {
+      "lot_id": "MF-422",
+      "fictional": true,
+      "species": "Brazilian teak",
+      "volume_board_feet": 22000,
+      "current_moisture_percentage": 10.5,
+      "target_moisture_percentage": 10.0,
+      "drying_status": "quality_hold",
+      "estimated_completion_date": "2026-08-22",
+      "required_date": "2026-08-23",
+      "destination": "Rio Branco, Brazil",
+      "documentation_status": "complete",
+      "transport_readiness": "quality_hold",
+      "received": true,
+      "supplier_action_required": false,
+      "supplier_action": "none",
+      "quality_problem_recorded": true,
+      "near_required_date": true
+    }
+  },
+  "escalation_triggers": {
+    "delayed_lot": true,
+    "not_transport_ready_near_required_date": true,
+    "quality_problem_recorded": true
+  }
+}

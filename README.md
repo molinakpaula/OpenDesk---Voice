@@ -1,57 +1,153 @@
-# OpenDesk Voice
+# MaderaFlow Voice Support API
 
-This project is the first backend milestone for a fictional multilingual IT
-support voice agent. It provides a small API that reports fictional outage
-information for `vpn`, `email`, and `identity`.
+MaderaFlow is a fictional wood-drying and cross-border logistics coordination
+company headquartered in Puerto Maldonado, Peru. In this fictional scenario, it
+serves wood suppliers, manufacturers, and logistics partners in Peru, Brazil,
+and the United States.
 
-It does not connect to ElevenLabs, ServiceNow, OpenAI, or any real company or
-employee data.
+This repository contains a small multilingual FastAPI backend for looking up
+fictional wood-lot status. Every organization, caller, and lot in the project is
+fictional. The project contains no real customer, employee, shipment, or sensor
+data.
 
-## Architecture
+## Why caller context matters
 
-The planned request flow is:
+The same lot should not produce one generic answer for everyone. The API uses a
+fictional caller profile to select the caller's language and reveal only the
+information relevant to that role:
+
+- A **buyer** hears drying progress, the latest recorded moisture value, the
+  target moisture, the estimated completion date, and shipment readiness.
+- A **supplier** hears whether the lot was received, its documentation status,
+  and whether supplier action is required.
+- A **transport partner** hears collection readiness, the destination, and
+  whether transport can be scheduled. Buyer-specific and pricing information is
+  not returned.
+
+This context filtering makes the backend useful for a specialized support agent
+instead of a generic voice assistant.
+
+## Supported languages
+
+The caller profile determines the language of `spoken_message`:
+
+| Code | Language |
+| --- | --- |
+| `en` | English |
+| `es` | Spanish |
+| `pt` | Portuguese |
+
+## Fictional caller profiles
+
+| Caller ID | Role | Location | Language | Priority |
+| --- | --- | --- | --- | --- |
+| `US-BUYER-001` | Buyer | Houston, United States | English | High |
+| `PE-SUPPLIER-001` | Supplier | Puerto Maldonado, Peru | Spanish | Normal |
+| `BR-LOGISTICS-001` | Transport partner | Rio Branco, Brazil | Portuguese | Normal |
+
+Caller and lot IDs are case-insensitive, so `mf-204` and `MF-204` refer to the
+same fictional lot.
+
+## API endpoints
+
+An API endpoint is an address where another program asks the backend for
+information. A `GET` request retrieves information without changing it.
+
+- `GET /health` confirms that the backend can respond.
+- `GET /organization` returns the fictional organization and languages.
+- `GET /callers/{caller_id}` returns one fictional caller profile.
+- `GET /lots/{lot_id}?caller_id={caller_id}` returns a role- and
+  language-specific lot response.
+- `GET /docs` opens FastAPI's interactive API documentation.
+
+Unknown caller and lot IDs return `404 Not Found`, meaning the requested
+fictional record does not exist.
+
+## Example requests
+
+After starting the server, these examples ask about the same lot from three
+different perspectives.
+
+English buyer response:
 
 ```text
-Caller -> ElevenLabs voice layer -> OpenDesk FastAPI -> fictional service status
+http://127.0.0.1:8000/lots/MF-204?caller_id=US-BUYER-001
 ```
 
-This repository currently contains only the OpenDesk FastAPI component. A future
-voice layer can turn speech into a service name, request an endpoint such as
-`/outages/email`, and speak the returned message. No ElevenLabs credentials or
-API calls are included in this milestone.
+Spanish supplier response:
 
-## What is an API endpoint?
+```text
+http://127.0.0.1:8000/lots/MF-204?caller_id=PE-SUPPLIER-001
+```
 
-An API endpoint is an address that another program can call to request data or
-perform an action. For example, a `GET` request to `/outages/vpn` asks this
-backend for the fictional status of the VPN service. The backend answers with
-JSON, a structured text format that programs can easily read.
+Portuguese transport-partner response:
 
-## Files
+```text
+http://127.0.0.1:8000/lots/MF-204?caller_id=BR-LOGISTICS-001
+```
 
-- `main.py` contains the FastAPI application, endpoints, and fictional outage
-  data.
-- `requirements.txt` lists the Python packages needed to run the backend.
-- `.gitignore` prevents the local virtual environment, secret environment
-  settings, and generated Python cache files from being committed to Git.
-- `tests/test_main.py` checks successful and error responses using Python's
-  built-in test tools.
+The structured fields and `spoken_message` change because each caller has a
+different role and preferred language.
 
-## Set up the backend on Windows
+## Safety boundaries
 
-Open PowerShell in this project directory.
+The API uses fixed fictional records. It does not:
 
-Activate the existing virtual environment:
+- invent or claim to retrieve live moisture measurements;
+- guarantee an estimated completion date;
+- provide legal or customs advice;
+- admit liability; or
+- expose information unrelated to the caller's role.
+
+For a high-priority buyer, `escalation_recommended` becomes `true` when a lot is
+delayed, is not transport-ready near its required date, or has a recorded
+quality problem. This is a support-routing signal, not an admission of liability.
+
+## Project files
+
+- `main.py` defines the FastAPI application, fictional organization, caller and
+  lot configuration loading, validation, context filtering, multilingual
+  messages, and API endpoints.
+- `config/maderaflow.json` contains editable fictional organization, caller,
+  lot, and escalation data. Keeping these facts outside Python makes the
+  business context configurable without changing application logic.
+- `tests/test_main.py` sends automated requests through the application and
+  checks successful responses, errors, language selection, role-specific
+  content, escalation, and confidentiality boundaries.
+- `requirements.txt` pins the two runtime packages needed to reproduce the
+  tested environment.
+- `.gitignore` prevents virtual environments, environment secrets, editor
+  settings, and generated Python cache files from being committed.
+
+## Set up on Windows
+
+Open PowerShell in the project directory and activate the existing virtual
+environment:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-Install the required packages if they are not already installed:
+Install the pinned requirements if needed:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
+
+No database, API key, or external account is required.
+
+## Change fictional business data
+
+Edit `config/maderaflow.json` to change fictional caller profiles, lot facts, or
+enabled escalation triggers. Restart the development server after saving the
+file. On startup, `main.py` checks that required sections exist, IDs match their
+configuration keys, and every caller uses a supported role and language.
+
+Translations remain in `main.py`. This keeps operational wording and role-based
+privacy behavior covered by automated tests. Do not put secrets or real
+customer, shipment, employee, or sensor data in the configuration file.
+
+## Start and try the backend
 
 Start the development server:
 
@@ -59,41 +155,34 @@ Start the development server:
 python -m uvicorn main:app --reload
 ```
 
-In `main:app`, `main` refers to `main.py` and `app` is the FastAPI application
-created in that file. The `--reload` option restarts the development server
-when the code changes.
-
-## Test the backend
-
-Keep the server running and open these addresses in a browser:
-
-- Health check: <http://127.0.0.1:8000/health>
-- VPN outage: <http://127.0.0.1:8000/outages/vpn>
-- Email outage: <http://127.0.0.1:8000/outages/email>
-- Identity outage: <http://127.0.0.1:8000/outages/identity>
-- Unknown service example: <http://127.0.0.1:8000/outages/printer>
-- Interactive API documentation: <http://127.0.0.1:8000/docs>
-
-The first four API requests should return JSON successfully. The unknown
-service example should return HTTP status `404 Not Found` with a message listing
-the supported services.
+In `main:app`, `main` means `main.py`, and `app` is the FastAPI application
+inside that file. Visit <http://127.0.0.1:8000/docs> to try each endpoint in a
+browser.
 
 ## Run the automated tests
-
-With the virtual environment activated, run:
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
-The tests send requests through the FastAPI application without opening a
-network port. They verify the health check, every supported service,
-case-insensitive service names, and the `404` response for an unknown service.
+The tests use Python's built-in testing tools, so no extra test package is
+required.
 
-## Future voice-agent connection
+## Future ElevenLabs integration
 
-Later, a voice system could convert a caller's speech into text, identify the
-requested service, and call an endpoint such as `/outages/email`. This backend
-would return outage data, and the voice system could turn that response into a
-spoken answer. External speech, ticketing, and AI integrations are intentionally
-outside this milestone.
+ElevenLabs is intentionally not connected in this milestone. A future voice
+layer could follow this flow:
+
+```text
+Caller speech
+    -> ElevenLabs voice layer
+    -> caller and lot IDs supplied to MaderaFlow FastAPI
+    -> context-aware spoken_message
+    -> ElevenLabs speech response
+```
+
+The API already returns a `spoken_message` in the fictional caller's preferred
+language. A future integration can speak that message while keeping business
+rules, role filtering, and fictional lot context inside this backend. Twilio,
+Supabase, authentication, and real customer data are also outside this
+milestone.
