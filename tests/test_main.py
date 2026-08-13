@@ -125,6 +125,10 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(body["tool"]["method"], "POST")
         self.assertEqual(body["tool"]["path"], "/support-requests")
         self.assertEqual(
+            body["tool"]["url"],
+            "http://127.0.0.1:8000/support-requests",
+        )
+        self.assertEqual(
             body["tool"]["required_fields"],
             ["caller_id", "lot_id", "intent"],
         )

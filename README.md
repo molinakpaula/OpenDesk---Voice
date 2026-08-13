@@ -10,6 +10,12 @@ fictional wood-lot status. Every organization, caller, and lot in the project is
 fictional. The project contains no real customer, employee, shipment, or sensor
 data.
 
+Live demonstration: <https://maderaflow-voice-support.onrender.com>
+
+- Health: <https://maderaflow-voice-support.onrender.com/health>
+- Public voice contract: <https://maderaflow-voice-support.onrender.com/voice-agent-config>
+- Interactive API documentation: <https://maderaflow-voice-support.onrender.com/docs>
+
 ## Why caller context matters
 
 The same lot should not produce one generic answer for everyone. The API uses a

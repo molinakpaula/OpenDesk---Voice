@@ -16,6 +16,7 @@ from pydantic import BaseModel
 CONFIG_PATH = Path(__file__).parent / "config" / "maderaflow.json"
 APP_ENV = os.getenv("APP_ENV", "development")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 REQUEST_LOGGER = logging.getLogger("maderaflow.requests")
 SUPPORTED_CALLER_TYPES = {"buyer", "supplier", "transport_partner"}
@@ -470,6 +471,7 @@ def get_voice_agent_config() -> dict[str, Any]:
         "tool": {
             "method": "POST",
             "path": "/support-requests",
+            "url": f"{PUBLIC_BASE_URL}/support-requests",
             "required_fields": ["caller_id", "lot_id", "intent"],
         },
         "support_hours": {
