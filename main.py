@@ -1,10 +1,13 @@
 """Configurable fictional API for MaderaFlow wood-drying voice support."""
 
 import json
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 
 CONFIG_PATH = Path(__file__).parent / "config" / "maderaflow.json"
@@ -15,6 +18,7 @@ REQUIRED_CONFIG_SECTIONS = {
     "callers",
     "lots",
     "escalation_triggers",
+    "support_hours",
 }
 
 
@@ -59,6 +63,53 @@ ORGANIZATION = CONFIG["organization"]
 CALLERS = CONFIG["callers"]
 LOTS = CONFIG["lots"]
 ESCALATION_TRIGGERS = CONFIG["escalation_triggers"]
+SUPPORT_HOURS = CONFIG["support_hours"]
+
+
+class SupportRequest(BaseModel):
+    """Structured context expected from a future voice layer."""
+
+    caller_id: str
+    lot_id: str
+    intent: str
+
+
+LABELS = {
+    "drying_on_schedule": {
+        "en": "drying on schedule",
+        "es": "secándose según lo programado",
+        "pt": "secando conforme o cronograma",
+    },
+    "delayed": {"en": "delayed", "es": "retrasado", "pt": "atrasado"},
+    "quality_hold": {
+        "en": "on quality hold",
+        "es": "retenido por control de calidad",
+        "pt": "retido para controle de qualidade",
+    },
+    "not_ready": {
+        "en": "not ready",
+        "es": "no listo",
+        "pt": "não pronto",
+    },
+    "ready": {"en": "ready", "es": "listo", "pt": "pronto"},
+    "complete": {"en": "complete", "es": "completa", "pt": "completa"},
+    "supplier_documents_pending": {
+        "en": "supplier documents pending",
+        "es": "documentos del proveedor pendientes",
+        "pt": "documentos do fornecedor pendentes",
+    },
+    "submit_missing_origin_document": {
+        "en": "submit the missing origin document",
+        "es": "presentar el documento de origen pendiente",
+        "pt": "enviar o documento de origem pendente",
+    },
+    "none": {"en": "none", "es": "ninguna", "pt": "nenhuma"},
+}
+
+
+def _label(value: str, language: str) -> str:
+    """Translate an internal operational code for speech without changing it."""
+    return LABELS.get(value, {}).get(language, value.replace("_", " "))
 
 
 app = FastAPI(
@@ -92,28 +143,30 @@ def _find_lot(lot_id: str) -> dict[str, Any]:
 
 
 def _buyer_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
+    drying_status = _label(lot["drying_status"], language)
+    transport_readiness = _label(lot["transport_readiness"], language)
     messages = {
         "en": (
-            f"Lot {lot['lot_id']} is {lot['drying_status']}. The latest recorded "
+            f"Lot {lot['lot_id']} is {drying_status}. The latest recorded "
             f"moisture is {lot['current_moisture_percentage']} percent, with a "
             f"target of {lot['target_moisture_percentage']} percent. Completion is "
             f"estimated for {lot['estimated_completion_date']}, but this date is not "
-            f"guaranteed. Shipment readiness is {lot['transport_readiness']}."
+            f"guaranteed. Shipment readiness is {transport_readiness}."
         ),
         "es": (
-            f"El lote {lot['lot_id']} está {lot['drying_status']}. La última humedad "
+            f"El lote {lot['lot_id']} está {drying_status}. La última humedad "
             f"registrada es {lot['current_moisture_percentage']} por ciento, con un "
             f"objetivo de {lot['target_moisture_percentage']} por ciento. La "
             f"finalización se estima para {lot['estimated_completion_date']}, pero la "
             f"fecha no está garantizada. El estado de envío es "
-            f"{lot['transport_readiness']}."
+            f"{transport_readiness}."
         ),
         "pt": (
-            f"O lote {lot['lot_id']} está {lot['drying_status']}. A última umidade "
+            f"O lote {lot['lot_id']} está {drying_status}. A última umidade "
             f"registrada é {lot['current_moisture_percentage']} por cento, com meta de "
             f"{lot['target_moisture_percentage']} por cento. A conclusão está estimada "
             f"para {lot['estimated_completion_date']}, mas a data não é garantida. A "
-            f"situação para embarque é {lot['transport_readiness']}."
+            f"situação para embarque é {transport_readiness}."
         ),
     }
     return {
@@ -128,19 +181,21 @@ def _buyer_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
 
 def _supplier_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
     action_required = lot["supplier_action_required"]
+    documentation_status = _label(lot["documentation_status"], language)
+    supplier_action = _label(lot["supplier_action"], language)
     action_messages = {
         "en": (
-            f"Supplier action is required: {lot['supplier_action']}."
+            f"Supplier action is required: {supplier_action}."
             if action_required
             else "No supplier action is currently required."
         ),
         "es": (
-            f"Se requiere acción del proveedor: {lot['supplier_action']}."
+            f"Se requiere acción del proveedor: {supplier_action}."
             if action_required
             else "Actualmente no se requiere ninguna acción del proveedor."
         ),
         "pt": (
-            f"É necessária uma ação do fornecedor: {lot['supplier_action']}."
+            f"É necessária uma ação do fornecedor: {supplier_action}."
             if action_required
             else "Nenhuma ação do fornecedor é necessária no momento."
         ),
@@ -148,15 +203,15 @@ def _supplier_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
     messages = {
         "en": (
             f"Lot {lot['lot_id']} has been received. Documentation status is "
-            f"{lot['documentation_status']}. {action_messages['en']}"
+            f"{documentation_status}. {action_messages['en']}"
         ),
         "es": (
             f"El lote {lot['lot_id']} fue recibido. El estado de la documentación es "
-            f"{lot['documentation_status']}. {action_messages['es']}"
+            f"{documentation_status}. {action_messages['es']}"
         ),
         "pt": (
             f"O lote {lot['lot_id']} foi recebido. A situação da documentação é "
-            f"{lot['documentation_status']}. {action_messages['pt']}"
+            f"{documentation_status}. {action_messages['pt']}"
         ),
     }
     return {
@@ -170,6 +225,7 @@ def _supplier_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
 
 def _transport_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
     collection_ready = lot["transport_readiness"] == "ready"
+    collection_status = _label(lot["transport_readiness"], language)
     schedule_text = {
         "en": (
             "Transport can be scheduled."
@@ -190,17 +246,17 @@ def _transport_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
     messages = {
         "en": (
             f"Lot {lot['lot_id']} collection readiness is "
-            f"{lot['transport_readiness']}. Destination: {lot['destination']}. "
+            f"{collection_status}. Destination: {lot['destination']}. "
             f"{schedule_text['en']}"
         ),
         "es": (
             f"La preparación para recoger el lote {lot['lot_id']} es "
-            f"{lot['transport_readiness']}. Destino: {lot['destination']}. "
+            f"{collection_status}. Destino: {lot['destination']}. "
             f"{schedule_text['es']}"
         ),
         "pt": (
             f"A situação de coleta do lote {lot['lot_id']} é "
-            f"{lot['transport_readiness']}. Destino: {lot['destination']}. "
+            f"{collection_status}. Destino: {lot['destination']}. "
             f"{schedule_text['pt']}"
         ),
     }
@@ -228,6 +284,110 @@ def _buyer_escalation_recommended(lot: dict[str, Any]) -> bool:
         and lot["quality_problem_recorded"]
     )
     return delayed or schedule_risk or quality_problem
+
+
+def _now_in_lima() -> datetime:
+    """Return the current time in the configured support timezone."""
+    return datetime.now(ZoneInfo(SUPPORT_HOURS["timezone"]))
+
+
+def _support_is_open(now: datetime | None = None) -> bool:
+    """Check fictional weekday support hours; holidays are not modeled yet."""
+    current = now or _now_in_lima()
+    opens_at = time.fromisoformat(SUPPORT_HOURS["opens_at"])
+    closes_at = time.fromisoformat(SUPPORT_HOURS["closes_at"])
+    return (
+        current.weekday() in SUPPORT_HOURS["working_days"]
+        and opens_at <= current.time().replace(tzinfo=None) < closes_at
+    )
+
+
+def _fallback_response(language: str, reason: str) -> dict[str, Any]:
+    support_open = _support_is_open()
+    route = "human_handoff" if support_open else "open_ticket"
+    messages = {
+        "en": {
+            "human_handoff": "I cannot safely complete this request. I recommend transferring you to a MaderaFlow support specialist.",
+            "open_ticket": "MaderaFlow support is currently closed. I recommend opening a support ticket for follow-up during working hours.",
+        },
+        "es": {
+            "human_handoff": "No puedo completar esta solicitud de forma segura. Recomiendo transferirle a un especialista de soporte de MaderaFlow.",
+            "open_ticket": "El soporte de MaderaFlow está cerrado en este momento. Recomiendo abrir un ticket para seguimiento durante el horario laboral.",
+        },
+        "pt": {
+            "human_handoff": "Não posso concluir esta solicitação com segurança. Recomendo transferir você para um especialista de suporte da MaderaFlow.",
+            "open_ticket": "O suporte da MaderaFlow está fechado no momento. Recomendo abrir um ticket para acompanhamento durante o horário comercial.",
+        },
+    }
+    return {
+        "resolved": False,
+        "reason": reason,
+        "support_open": support_open,
+        "next_action": route,
+        "human_handoff_recommended": support_open,
+        "ticket_recommended": not support_open,
+        "ticket_created": False,
+        "spoken_message": messages[language][route],
+    }
+
+
+def _support_request_response(request: SupportRequest) -> dict[str, Any]:
+    caller = _find_caller(request.caller_id)
+    lot = _find_lot(request.lot_id)
+    language = caller["preferred_language"]["code"]
+    allowed_intent_by_role = {
+        "buyer": "check_lot_status",
+        "supplier": "check_documentation",
+        "transport_partner": "check_transport_readiness",
+    }
+    supported_intents = set(allowed_intent_by_role.values())
+
+    if request.intent not in supported_intents:
+        fallback = _fallback_response(language, "unsupported_intent")
+        return {
+            "fictional": True,
+            "caller_id": caller["caller_id"],
+            "lot_id": lot["lot_id"],
+            "intent": request.intent,
+            "language": language,
+            **fallback,
+        }
+
+    if request.intent != allowed_intent_by_role[caller["caller_type"]]:
+        fallback = _fallback_response(language, "intent_not_available_for_caller_role")
+        return {
+            "fictional": True,
+            "caller_id": caller["caller_id"],
+            "lot_id": lot["lot_id"],
+            "intent": request.intent,
+            "language": language,
+            **fallback,
+        }
+
+    role_builders = {
+        "buyer": _buyer_response,
+        "supplier": _supplier_response,
+        "transport_partner": _transport_response,
+    }
+    role_view = role_builders[caller["caller_type"]](lot, language)
+    escalation = (
+        caller["caller_type"] == "buyer"
+        and caller["support_priority"] == "high"
+        and _buyer_escalation_recommended(lot)
+    )
+    return {
+        "fictional": True,
+        "caller_id": caller["caller_id"],
+        "lot_id": lot["lot_id"],
+        "intent": request.intent,
+        "language": language,
+        "resolved": True,
+        "escalation_recommended": escalation,
+        "human_handoff_recommended": escalation,
+        "ticket_recommended": False,
+        "ticket_created": False,
+        **role_view,
+    }
 
 
 @app.get("/health")
@@ -275,3 +435,9 @@ def get_lot(lot_id: str, caller_id: str) -> dict[str, Any]:
         "escalation_recommended": escalation_recommended,
         **role_view,
     }
+
+
+@app.post("/support-requests")
+def create_support_response(request: SupportRequest) -> dict[str, Any]:
+    """Resolve one voice-ready fictional request or recommend safe follow-up."""
+    return _support_request_response(request)

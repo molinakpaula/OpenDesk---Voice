@@ -3,15 +3,23 @@
 import asyncio
 import json
 import unittest
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from main import LOTS, app
 
 
-async def request(url: str) -> tuple[int, dict[str, Any]]:
+async def request(
+    url: str,
+    method: str = "GET",
+    json_body: dict[str, str] | None = None,
+) -> tuple[int, dict[str, Any]]:
     """Send one GET request directly through the ASGI application."""
     parsed_url = urlsplit(url)
+    encoded_body = json.dumps(json_body).encode("utf-8") if json_body else b""
     response_messages: list[dict] = []
     request_sent = False
 
@@ -19,7 +27,11 @@ async def request(url: str) -> tuple[int, dict[str, Any]]:
         nonlocal request_sent
         if not request_sent:
             request_sent = True
-            return {"type": "http.request", "body": b"", "more_body": False}
+            return {
+                "type": "http.request",
+                "body": encoded_body,
+                "more_body": False,
+            }
         return {"type": "http.disconnect"}
 
     async def send(message: dict) -> None:
@@ -29,13 +41,17 @@ async def request(url: str) -> tuple[int, dict[str, Any]]:
         "type": "http",
         "asgi": {"version": "3.0"},
         "http_version": "1.1",
-        "method": "GET",
+        "method": method,
         "scheme": "http",
         "path": parsed_url.path,
         "raw_path": parsed_url.path.encode("ascii"),
         "query_string": parsed_url.query.encode("ascii"),
         "root_path": "",
-        "headers": [],
+        "headers": (
+            [(b"content-type", b"application/json")]
+            if json_body is not None
+            else []
+        ),
         "client": ("test-client", 1234),
         "server": ("test-server", 80),
     }
@@ -58,6 +74,9 @@ async def request(url: str) -> tuple[int, dict[str, Any]]:
 class ApiTests(unittest.TestCase):
     def get(self, url: str) -> tuple[int, dict[str, Any]]:
         return asyncio.run(request(url))
+
+    def post(self, url: str, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
+        return asyncio.run(request(url, method="POST", json_body=body))
 
     def test_health_endpoint(self) -> None:
         status, body = self.get("/health")
@@ -158,6 +177,8 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(body["documentation_status"], "supplier_documents_pending")
         self.assertTrue(body["supplier_action_required"])
         self.assertNotIn("latest_recorded_moisture_percentage", body)
+        self.assertIn("documentos del proveedor pendientes", body["spoken_message"])
+        self.assertNotIn("supplier_documents_pending", body["spoken_message"])
 
     def test_transport_partner_receives_collection_information(self) -> None:
         status, body = self.get("/lots/MF-422?caller_id=BR-LOGISTICS-001")
@@ -200,6 +221,67 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn("procurement", serialized_body)
         self.assertNotIn("latest_recorded_moisture_percentage", body)
         self.assertNotIn("estimated_completion_date", body)
+
+    def test_support_endpoint_resolves_all_three_intents(self) -> None:
+        examples = {
+            "check_lot_status": "US-BUYER-001",
+            "check_documentation": "PE-SUPPLIER-001",
+            "check_transport_readiness": "BR-LOGISTICS-001",
+        }
+
+        for intent, caller_id in examples.items():
+            with self.subTest(intent=intent):
+                status, body = self.post(
+                    "/support-requests",
+                    {"caller_id": caller_id, "lot_id": "MF-204", "intent": intent},
+                )
+                self.assertEqual(status, 200)
+                self.assertTrue(body["resolved"])
+                self.assertEqual(body["intent"], intent)
+                self.assertTrue(body["spoken_message"])
+                self.assertFalse(body["ticket_created"])
+
+    def test_unresolved_request_recommends_human_during_working_hours(self) -> None:
+        working_time = datetime(2026, 8, 13, 10, 0, tzinfo=ZoneInfo("America/Lima"))
+
+        with patch("main._now_in_lima", return_value=working_time):
+            status, body = self.post(
+                "/support-requests",
+                {
+                    "caller_id": "PE-SUPPLIER-001",
+                    "lot_id": "MF-317",
+                    "intent": "unknown_request",
+                },
+            )
+
+        self.assertEqual(status, 200)
+        self.assertFalse(body["resolved"])
+        self.assertTrue(body["support_open"])
+        self.assertEqual(body["next_action"], "human_handoff")
+        self.assertTrue(body["human_handoff_recommended"])
+        self.assertFalse(body["ticket_recommended"])
+        self.assertIn("especialista", body["spoken_message"])
+
+    def test_unresolved_request_recommends_ticket_after_hours(self) -> None:
+        after_hours = datetime(2026, 8, 13, 20, 0, tzinfo=ZoneInfo("America/Lima"))
+
+        with patch("main._now_in_lima", return_value=after_hours):
+            status, body = self.post(
+                "/support-requests",
+                {
+                    "caller_id": "BR-LOGISTICS-001",
+                    "lot_id": "MF-422",
+                    "intent": "check_documentation",
+                },
+            )
+
+        self.assertEqual(status, 200)
+        self.assertFalse(body["resolved"])
+        self.assertFalse(body["support_open"])
+        self.assertEqual(body["next_action"], "open_ticket")
+        self.assertTrue(body["ticket_recommended"])
+        self.assertFalse(body["ticket_created"])
+        self.assertIn("ticket", body["spoken_message"])
 
 
 if __name__ == "__main__":

@@ -58,6 +58,8 @@ information. A `GET` request retrieves information without changing it.
 - `GET /callers/{caller_id}` returns one fictional caller profile.
 - `GET /lots/{lot_id}?caller_id={caller_id}` returns a role- and
   language-specific lot response.
+- `POST /support-requests` accepts structured context from a future voice layer
+  and handles lot status, documentation, and transport-readiness intents.
 - `GET /docs` opens FastAPI's interactive API documentation.
 
 Unknown caller and lot IDs return `404 Not Found`, meaning the requested
@@ -89,6 +91,44 @@ http://127.0.0.1:8000/lots/MF-204?caller_id=BR-LOGISTICS-001
 The structured fields and `spoken_message` change because each caller has a
 different role and preferred language.
 
+## Voice-ready support requests
+
+The future voice layer can send one JSON request after identifying the caller,
+lot, and intent:
+
+```json
+{
+  "caller_id": "PE-SUPPLIER-001",
+  "lot_id": "MF-317",
+  "intent": "check_documentation"
+}
+```
+
+Supported intents are:
+
+- `check_lot_status` for a buyer;
+- `check_documentation` for a supplier; and
+- `check_transport_readiness` for a transport partner.
+
+The role restriction is intentional. A transport partner cannot use this
+endpoint to request buyer-only status details. Spoken messages translate
+internal operational codes into natural English, Spanish, or Portuguese, while
+structured fields retain stable codes for software integrations.
+
+## Human support and after-hours routing
+
+Fictional support hours are Monday through Friday, 08:00–18:00 in the
+`America/Lima` timezone. Holidays are not modeled yet. These hours are editable
+in `config/maderaflow.json`.
+
+If an intent is unsupported or inappropriate for the caller's role:
+
+- during working hours, the response recommends a human handoff;
+- after working hours, the response recommends opening a support ticket.
+
+`ticket_created` remains `false`. This milestone recommends the next action but
+does not create a real ticket or connect to an external ticketing system.
+
 ## Safety boundaries
 
 The API uses fixed fictional records. It does not:
@@ -109,13 +149,13 @@ quality problem. This is a support-routing signal, not an admission of liability
   lot configuration loading, validation, context filtering, multilingual
   messages, and API endpoints.
 - `config/maderaflow.json` contains editable fictional organization, caller,
-  lot, and escalation data. Keeping these facts outside Python makes the
-  business context configurable without changing application logic.
+  lot, escalation, and support-hours data. Keeping these facts outside Python
+  makes the business context configurable without changing application logic.
 - `tests/test_main.py` sends automated requests through the application and
   checks successful responses, errors, language selection, role-specific
   content, escalation, and confidentiality boundaries.
-- `requirements.txt` pins the two runtime packages needed to reproduce the
-  tested environment.
+- `requirements.txt` pins FastAPI, Uvicorn, and timezone data needed to reproduce
+  Lima working-hours checks consistently across platforms.
 - `.gitignore` prevents virtual environments, environment secrets, editor
   settings, and generated Python cache files from being committed.
 
@@ -138,10 +178,11 @@ No database, API key, or external account is required.
 
 ## Change fictional business data
 
-Edit `config/maderaflow.json` to change fictional caller profiles, lot facts, or
-enabled escalation triggers. Restart the development server after saving the
-file. On startup, `main.py` checks that required sections exist, IDs match their
-configuration keys, and every caller uses a supported role and language.
+Edit `config/maderaflow.json` to change fictional caller profiles, lot facts,
+enabled escalation triggers, or support hours. Restart the development server
+after saving the file. On startup, `main.py` checks that required sections exist,
+IDs match their configuration keys, and every caller uses a supported role and
+language.
 
 Translations remain in `main.py`. This keeps operational wording and role-based
 privacy behavior covered by automated tests. Do not put secrets or real

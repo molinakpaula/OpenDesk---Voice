@@ -114,5 +114,12 @@
     "delayed_lot": true,
     "not_transport_ready_near_required_date": true,
     "quality_problem_recorded": true
+  },
+  "support_hours": {
+    "timezone": "America/Lima",
+    "working_days": [0, 1, 2, 3, 4],
+    "opens_at": "08:00",
+    "closes_at": "18:00",
+    "holidays_modeled": false
   }
 }
