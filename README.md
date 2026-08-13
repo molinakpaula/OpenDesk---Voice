@@ -134,6 +134,12 @@ parameter with the three canonical caller IDs as predefined values. Configure
 spoken phrases to these stable values, and the backend independently recognizes
 the same aliases as a defensive fallback.
 
+Canonical IDs and internal English role codes are for software integration, not
+for routine speech. The voice agent should confirm them with natural localized
+phrases such as "perfil de proveedor" in Spanish or "parceiro de transporte"
+in Portuguese. Its language-detection system tool should run before the first
+reply whenever the caller begins in another supported language.
+
 Supported intents are:
 
 - `check_lot_status` for a buyer;
