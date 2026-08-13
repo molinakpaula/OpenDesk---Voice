@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import secrets
+import unicodedata
 from datetime import datetime, time
 from pathlib import Path
 from time import perf_counter
@@ -76,6 +77,126 @@ CALLERS = CONFIG["callers"]
 LOTS = CONFIG["lots"]
 ESCALATION_TRIGGERS = CONFIG["escalation_triggers"]
 SUPPORT_HOURS = CONFIG["support_hours"]
+
+
+def _voice_identifier_key(value: str) -> str:
+    """Fold one spoken or typed identifier into a comparison-only key.
+
+    Speech-to-text tools commonly remove hyphens, insert spaces, or omit accent
+    marks. This key removes those presentation differences without changing the
+    canonical identifier stored in the fictional data.
+    """
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    return "".join(
+        character
+        for character in decomposed
+        if character.isalnum() and not unicodedata.combining(character)
+    )
+
+
+def _build_voice_aliases(
+    alias_groups: dict[str, set[str]],
+    configured_records: dict[str, dict[str, Any]],
+    id_field: str,
+) -> dict[str, str]:
+    """Build a collision-checked alias index for configured fictional IDs."""
+    alias_index: dict[str, str] = {}
+    for canonical_key, aliases in alias_groups.items():
+        if canonical_key not in configured_records:
+            raise RuntimeError(f"Voice alias references unknown ID: {canonical_key}")
+
+        canonical_id = configured_records[canonical_key][id_field]
+        for alias in aliases | {canonical_id}:
+            alias_key = _voice_identifier_key(alias)
+            existing_key = alias_index.get(alias_key)
+            if existing_key is not None and existing_key != canonical_key:
+                raise RuntimeError(f"Voice alias is ambiguous: {alias}")
+            alias_index[alias_key] = canonical_key
+    return alias_index
+
+
+CALLER_VOICE_ALIASES = _build_voice_aliases(
+    {
+        "us-buyer-001": {
+            "US buyer one",
+            "United States buyer one",
+            "buyer one",
+            "comprador Estados Unidos uno",
+            "comprador uno",
+        },
+        "pe-supplier-001": {
+            "PE supplier one",
+            "Peru supplier one",
+            "supplier one",
+            "proveedor Peru uno",
+            "proveedor Peru cero cero uno",
+            "proveedor uno",
+            "fornecedor Peru um",
+        },
+        "br-logistics-001": {
+            "BR logistics one",
+            "Brazil logistics one",
+            "logistics one",
+            "Brazil transport partner one",
+            "logistica Brasil um",
+            "parceiro de transporte Brasil um",
+        },
+    },
+    CALLERS,
+    "caller_id",
+)
+
+LOT_VOICE_ALIASES = _build_voice_aliases(
+    {
+        "mf-204": {
+            "204",
+            "lot 204",
+            "lot two zero four",
+            "lot two hundred four",
+            "M F two zero four",
+            "em eff two zero four",
+            "lote 204",
+            "lote dos cero cuatro",
+            "lote doscientos cuatro",
+            "eme efe dos cero cuatro",
+            "lote dois zero quatro",
+            "lote duzentos e quatro",
+            "eme efe dois zero quatro",
+        },
+        "mf-317": {
+            "317",
+            "lot 317",
+            "lot three one seven",
+            "lot three hundred seventeen",
+            "M F three one seven",
+            "em eff three one seven",
+            "lote 317",
+            "lote tres uno siete",
+            "lote trescientos diecisiete",
+            "eme efe tres uno siete",
+            "lote tres um sete",
+            "lote trezentos e dezessete",
+            "eme efe tres um sete",
+        },
+        "mf-422": {
+            "422",
+            "lot 422",
+            "lot four two two",
+            "lot four hundred twenty two",
+            "M F four two two",
+            "em eff four two two",
+            "lote 422",
+            "lote cuatro dos dos",
+            "lote cuatrocientos veintidos",
+            "eme efe cuatro dos dos",
+            "lote quatro dois dois",
+            "lote quatrocentos e vinte e dois",
+            "eme efe quatro dois dois",
+        },
+    },
+    LOTS,
+    "lot_id",
+)
 
 
 class SupportRequest(BaseModel):
@@ -151,7 +272,7 @@ app = FastAPI(
         "A fictional multilingual API for wood-drying status and cross-border "
         "logistics coordination. Every organization, caller, and lot is fictional."
     ),
-    version="0.3.0",
+    version="0.4.0",
 )
 
 
@@ -175,7 +296,8 @@ async def log_request_metadata(request: Request, call_next):
 
 
 def _find_caller(caller_id: str) -> dict[str, Any]:
-    caller = CALLERS.get(caller_id.lower())
+    caller_key = CALLER_VOICE_ALIASES.get(_voice_identifier_key(caller_id))
+    caller = CALLERS.get(caller_key) if caller_key else None
     if caller is None:
         raise HTTPException(
             status_code=404,
@@ -185,7 +307,8 @@ def _find_caller(caller_id: str) -> dict[str, Any]:
 
 
 def _find_lot(lot_id: str) -> dict[str, Any]:
-    lot = LOTS.get(lot_id.lower())
+    lot_key = LOT_VOICE_ALIASES.get(_voice_identifier_key(lot_id))
+    lot = LOTS.get(lot_key) if lot_key else None
     if lot is None:
         raise HTTPException(
             status_code=404,

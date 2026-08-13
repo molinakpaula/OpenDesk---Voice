@@ -52,7 +52,23 @@ The caller profile determines the language of `spoken_message`:
 | `BR-LOGISTICS-001` | Transport partner | Rio Branco, Brazil | Portuguese | Normal |
 
 Caller and lot IDs are case-insensitive, so `mf-204` and `MF-204` refer to the
-same fictional lot.
+same fictional lot. The voice endpoint also accepts carefully limited spoken
+aliases because speech recognition often removes hyphens or writes letters as
+words. It returns the canonical ID in every successful response.
+
+Examples include:
+
+| Spoken or typed value | Canonical ID |
+| --- | --- |
+| `buyer one` | `US-BUYER-001` |
+| `proveedor Perú uno` | `PE-SUPPLIER-001` |
+| `logística Brasil um` | `BR-LOGISTICS-001` |
+| `lot two zero four` or `lote dos cero cuatro` | `MF-204` |
+| `lote tres uno siete` | `MF-317` |
+| `lote quatro dois dois` | `MF-422` |
+
+Only documented aliases are accepted. A different caller number or lot number
+still returns `404 Not Found`; the API does not guess identifiers.
 
 ## API endpoints
 
@@ -111,6 +127,12 @@ lot, and intent:
   "intent": "check_documentation"
 }
 ```
+
+For reliable speech handling, configure the ElevenLabs `caller_id` body
+parameter with the three canonical caller IDs as predefined values. Configure
+`lot_id` with `MF-204`, `MF-317`, and `MF-422`. The agent prompt maps approved
+spoken phrases to these stable values, and the backend independently recognizes
+the same aliases as a defensive fallback.
 
 Supported intents are:
 

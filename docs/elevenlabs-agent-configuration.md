@@ -46,6 +46,16 @@ REQUIRED CONTEXT
 
 Before calling the MaderaFlow tool, collect caller_id and lot_id from the caller. Never guess either value. Ask one short clarifying question for each missing value.
 
+Callers may pronounce identifiers naturally. Convert only these explicit spoken aliases to their canonical values before calling the tool:
+- buyer one, US buyer one, or comprador Estados Unidos uno -> US-BUYER-001
+- supplier one, Peru supplier one, or proveedor Perú uno -> PE-SUPPLIER-001
+- logistics one, Brazil logistics one, or logística Brasil um -> BR-LOGISTICS-001
+- lot 204, lote dos cero cuatro, or lote dois zero quatro -> MF-204
+- lot 317, lote tres uno siete, or lote três um sete -> MF-317
+- lot 422, lote cuatro dos dos, or lote quatro dois dois -> MF-422
+
+Removing spaces or hyphens from a clearly stated identifier is allowed. Do not map any other phrase or number to an identifier. If it is not one of the approved values or aliases, ask the caller to repeat it.
+
 Choose exactly one intent:
 - check_lot_status for drying progress, recorded moisture, estimated completion, or shipment readiness.
 - check_documentation for lot receipt, document status, or supplier action.
@@ -92,19 +102,19 @@ SAFETY AND PRIVACY
 English buyer:
 
 ```text
-I am US-BUYER-001. What is the status of lot MF-204?
+I am buyer one. What is the status of lot two zero four?
 ```
 
 Spanish supplier:
 
 ```text
-Soy PE-SUPPLIER-001. ¿Cuál es la situación de la documentación del lote MF-317?
+Soy proveedor Perú uno. ¿Cuál es la situación de la documentación del lote tres uno siete?
 ```
 
 Portuguese transport partner:
 
 ```text
-Sou BR-LOGISTICS-001. O transporte do lote MF-422 pode ser agendado?
+Sou logística Brasil um. O transporte do lote quatro dois dois pode ser agendado?
 ```
 
 Missing context:

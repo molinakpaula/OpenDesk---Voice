@@ -52,11 +52,13 @@ Input schema:
   "properties": {
     "caller_id": {
       "type": "string",
-      "description": "Fictional caller ID stated or otherwise provided for the demonstration."
+      "enum": ["US-BUYER-001", "PE-SUPPLIER-001", "BR-LOGISTICS-001"],
+      "description": "Canonical fictional caller ID. Convert only an approved spoken alias from the agent prompt to one of these values."
     },
     "lot_id": {
       "type": "string",
-      "description": "Fictional MaderaFlow lot ID, for example MF-204."
+      "enum": ["MF-204", "MF-317", "MF-422"],
+      "description": "Canonical fictional MaderaFlow lot ID. Spoken forms such as lot 204 must be mapped to the matching value."
     },
     "intent": {
       "type": "string",

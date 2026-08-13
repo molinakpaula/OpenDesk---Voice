@@ -314,6 +314,86 @@ class ApiTests(unittest.TestCase):
                 self.assertTrue(body["spoken_message"])
                 self.assertFalse(body["ticket_created"])
 
+    def test_support_endpoint_accepts_spoken_aliases_in_all_languages(self) -> None:
+        examples = [
+            (
+                "buyer one",
+                "lot two zero four",
+                "check_lot_status",
+                "US-BUYER-001",
+                "MF-204",
+                "en",
+            ),
+            (
+                "proveedor Perú uno",
+                "lote tres uno siete",
+                "check_documentation",
+                "PE-SUPPLIER-001",
+                "MF-317",
+                "es",
+            ),
+            (
+                "logística Brasil um",
+                "lote quatro dois dois",
+                "check_transport_readiness",
+                "BR-LOGISTICS-001",
+                "MF-422",
+                "pt",
+            ),
+        ]
+
+        for caller_alias, lot_alias, intent, caller_id, lot_id, language in examples:
+            with self.subTest(language=language):
+                status, body = self.post(
+                    "/support-requests",
+                    {
+                        "caller_id": caller_alias,
+                        "lot_id": lot_alias,
+                        "intent": intent,
+                    },
+                )
+
+                self.assertEqual(status, 200)
+                self.assertTrue(body["resolved"])
+                self.assertEqual(body["caller_id"], caller_id)
+                self.assertEqual(body["lot_id"], lot_id)
+                self.assertEqual(body["language"], language)
+
+    def test_support_endpoint_accepts_ids_without_hyphens(self) -> None:
+        status, body = self.post(
+            "/support-requests",
+            {
+                "caller_id": "PE supplier 001",
+                "lot_id": "MF 317",
+                "intent": "check_documentation",
+            },
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["caller_id"], "PE-SUPPLIER-001")
+        self.assertEqual(body["lot_id"], "MF-317")
+
+    def test_spoken_aliases_do_not_guess_unknown_identifiers(self) -> None:
+        unknown_caller_status, _ = self.post(
+            "/support-requests",
+            {
+                "caller_id": "supplier two",
+                "lot_id": "317",
+                "intent": "check_documentation",
+            },
+        )
+        unknown_lot_status, _ = self.post(
+            "/support-requests",
+            {
+                "caller_id": "supplier one",
+                "lot_id": "318",
+                "intent": "check_documentation",
+            },
+        )
+
+        self.assertEqual(unknown_caller_status, 404)
+        self.assertEqual(unknown_lot_status, 404)
+
     def test_support_endpoint_requires_bearer_token(self) -> None:
         request_body = {
             "caller_id": "US-BUYER-001",
