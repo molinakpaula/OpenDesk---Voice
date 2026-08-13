@@ -161,6 +161,8 @@ quality problem. This is a support-routing signal, not an admission of liability
   makes the business context configurable without changing application logic.
 - `docs/elevenlabs-integration-contract.md` documents the future voice tool,
   conversation flow, safety rules, and multilingual examples for reviewers.
+- `docs/elevenlabs-agent-configuration.md` contains the reviewed system prompt,
+  multilingual greetings, voice settings, and conversation tests.
 - `tests/test_main.py` sends automated requests through the application and
   checks successful responses, errors, language selection, role-specific
   content, escalation, and confidentiality boundaries.
