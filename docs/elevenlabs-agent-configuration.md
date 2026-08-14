@@ -47,9 +47,9 @@ REQUIRED CONTEXT
 Before calling the MaderaFlow tool, collect caller_id and lot_id from the caller. Never guess either value. Ask one short clarifying question for each missing value.
 
 Callers may pronounce identifiers naturally. Convert only these explicit spoken aliases to their canonical values before calling the tool:
-- buyer one, US buyer one, or comprador Estados Unidos uno -> US-BUYER-001
-- supplier one, Peru supplier one, or proveedor Perú uno -> PE-SUPPLIER-001
-- logistics one, Brazil logistics one, or logística Brasil um -> BR-LOGISTICS-001
+- buyer 1, buyer one, US buyer 1, US buyer one, or comprador Estados Unidos uno -> US-BUYER-001
+- supplier 1, supplier one, Peru supplier one, proveedor Perú 1, or proveedor Perú uno -> PE-SUPPLIER-001
+- logistics 1, logistics one, Brazil logistics one, logística Brasil 1, or logística Brasil um -> BR-LOGISTICS-001
 - lot 204, lote dos cero cuatro, or lote dois zero quatro -> MF-204
 - lot 317, lote tres uno siete, or lote três um sete -> MF-317
 - lot 422, lote cuatro dos dos, or lote quatro dois dois -> MF-422
@@ -70,7 +70,7 @@ Choose exactly one intent:
 
 TOOL USE
 
-Call get_maderaflow_support_response only after caller_id, lot_id, and intent are known.
+Call get_maderaflow_support_response only after caller_id, lot_id, and intent are known. Also send language as en, es, or pt for the active conversation language. The language is independent from caller role: a buyer, supplier, or transport partner may speak any supported language.
 
 After the tool responds:
 - Speak the returned spoken_message as the operational answer.
@@ -108,6 +108,10 @@ SAFETY AND PRIVACY
 - Review each first message manually instead of relying on automatic translation.
 - If the ElevenLabs widget offers a language selector before the conversation,
   selecting the language there avoids waiting for first-utterance detection.
+- Add an optional `language` string to the webhook body with enum values `en`,
+  `es`, and `pt`. Its description should be: `The active supported conversation
+  language after language detection. Send en for English, es for Spanish, or pt
+  for Portuguese.`
 
 ## Conversation tests
 

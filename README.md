@@ -1,6 +1,6 @@
 # MaderaFlow Voice Support API
 
-[![Backend tests](https://github.com/molinakpaula/OpenDesk---Voice/actions/workflows/tests.yml/badge.svg)](https://github.com/molinakpaula/OpenDesk---Voice/actions/workflows/tests.yml)
+[![Backend tests](https://github.com/molinakpaula/maderaflow-voice-support/actions/workflows/tests.yml/badge.svg)](https://github.com/molinakpaula/maderaflow-voice-support/actions/workflows/tests.yml)
 [![Live API](https://img.shields.io/badge/API-live%20on%20Render-46E3B7)](https://maderaflow-voice-support.onrender.com/health)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-3776AB)](https://www.python.org/)
 
@@ -14,7 +14,8 @@ cross-border logistics support in English, Spanish, and Portuguese.
 
 **[Try the voice agent](https://elevenlabs.io/app/talk-to?agent_id=agent_2401kzxk9b7mf3jr3hw5dgcgsjtr&branch_id=agtbrch_3301kzxk9d3jf708fct42bcd8sfx)** ·
 **[Explore the live API](https://maderaflow-voice-support.onrender.com/docs)** ·
-**[Open the reviewer checklist](docs/reviewer-demo-checklist.md)**
+**[Open the reviewer checklist](docs/reviewer-demo-checklist.md)** ·
+**[Record the demo](docs/demo-video-script.md)**
 
 MaderaFlow represents a fictional company headquartered in Puerto Maldonado,
 Peru. It coordinates wood drying and cross-border logistics for suppliers,
@@ -93,7 +94,9 @@ instead of a generic voice assistant.
 
 ## Supported languages
 
-The caller profile determines the language of `spoken_message`:
+The protected voice endpoint accepts the active conversation language and
+returns `spoken_message` in that language. If the voice layer omits it, the
+fictional caller profile's preferred language is used as the default:
 
 | Code | Language |
 | --- | --- |
@@ -125,6 +128,10 @@ Examples include:
 | `lote tres uno siete` | `MF-317` |
 | `lote quatro dois dois` | `MF-422` |
 
+Numeric caller shortcuts such as `US buyer 1`, `proveedor Perú 1`, and
+`logística Brasil 1` are also accepted. This avoids failures when speech
+recognition converts “one” or “um” to the digit `1`.
+
 Only documented aliases are accepted. A different caller number or lot number
 still returns `404 Not Found`; the API does not guess identifiers.
 
@@ -138,8 +145,8 @@ information. A `GET` request retrieves information without changing it.
 - `GET /voice-agent-config` returns a public, non-sensitive contract for a
   voice layer.
 - `GET /callers/{caller_id}` returns one fictional caller profile.
-- `GET /lots/{lot_id}?caller_id={caller_id}` returns a role- and
-  language-specific lot response.
+- `GET /lots/{lot_id}?caller_id={caller_id}&language={language}` returns a
+  role-specific response in an optional supported language.
 - `POST /support-requests` accepts structured context from the ElevenLabs voice
   layer and handles lot status, documentation, and transport-readiness intents.
 - `GET /docs` opens FastAPI's interactive API documentation.
@@ -182,7 +189,8 @@ intent:
 {
   "caller_id": "PE-SUPPLIER-001",
   "lot_id": "MF-317",
-  "intent": "check_documentation"
+  "intent": "check_documentation",
+  "language": "es"
 }
 ```
 
@@ -197,6 +205,11 @@ for routine speech. The voice agent should confirm them with natural localized
 phrases such as "perfil de proveedor" in Spanish or "parceiro de transporte"
 in Portuguese. Its language-detection system tool should run before the first
 reply whenever the caller begins in another supported language.
+
+The optional `language` field separates spoken language from caller role. For
+example, `US-BUYER-001` can receive its buyer-specific lot-status answer in
+Spanish by sending `"language": "es"`; omitting the field keeps English as that
+profile's default.
 
 Supported intents are:
 
@@ -249,6 +262,8 @@ quality problem. This is a support-routing signal, not an admission of liability
   conversation flow, safety rules, and multilingual examples for reviewers.
 - `docs/reviewer-demo-checklist.md` provides repeatable end-to-end voice,
   privacy, safety, and handoff checks for demonstrations and reviews.
+- `docs/demo-video-script.md` gives a scene-by-scene script for recording a
+  short reviewer-facing product demonstration without exposing secrets.
 - `docs/elevenlabs-agent-configuration.md` contains the reviewed system prompt,
   multilingual greetings, voice settings, and conversation tests.
 - `tests/test_main.py` sends automated requests through the application and

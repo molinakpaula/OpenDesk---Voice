@@ -151,6 +151,8 @@ class ApiTests(unittest.TestCase):
             body["tool"]["required_fields"],
             ["caller_id", "lot_id", "intent"],
         )
+        self.assertEqual(body["tool"]["optional_fields"], ["language"])
+        self.assertEqual(body["tool"]["language_values"], ["en", "es", "pt"])
 
     def test_voice_agent_config_does_not_expose_caller_or_lot_records(self) -> None:
         status, body = self.get("/voice-agent-config")
@@ -228,6 +230,15 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertEqual(body["lot_id"], "MF-204")
+
+    def test_lot_endpoint_accepts_supported_language_override(self) -> None:
+        status, body = self.get(
+            "/lots/MF-204?caller_id=US-BUYER-001&language=es"
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["language"], "es")
+        self.assertIn("La última humedad", body["spoken_message"])
 
     def test_buyer_receives_drying_and_shipment_information(self) -> None:
         status, body = self.get("/lots/MF-204?caller_id=US-BUYER-001")
@@ -372,6 +383,74 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(body["caller_id"], "PE-SUPPLIER-001")
         self.assertEqual(body["lot_id"], "MF-317")
+
+    def test_support_endpoint_accepts_numeric_caller_aliases(self) -> None:
+        examples = [
+            ("US buyer 1", "check_lot_status", "US-BUYER-001"),
+            ("proveedor Perú 1", "check_documentation", "PE-SUPPLIER-001"),
+            (
+                "logística Brasil 1",
+                "check_transport_readiness",
+                "BR-LOGISTICS-001",
+            ),
+        ]
+
+        for caller_alias, intent, canonical_id in examples:
+            with self.subTest(caller_alias=caller_alias):
+                status, body = self.post(
+                    "/support-requests",
+                    {
+                        "caller_id": caller_alias,
+                        "lot_id": "MF-204",
+                        "intent": intent,
+                    },
+                )
+
+                self.assertEqual(status, 200)
+                self.assertEqual(body["caller_id"], canonical_id)
+
+    def test_each_role_can_receive_each_supported_language(self) -> None:
+        roles = [
+            ("US-BUYER-001", "check_lot_status"),
+            ("PE-SUPPLIER-001", "check_documentation"),
+            ("BR-LOGISTICS-001", "check_transport_readiness"),
+        ]
+        language_markers = {
+            "en": "Lot MF-204",
+            "es": "lote MF-204",
+            "pt": "lote MF-204",
+        }
+
+        for caller_id, intent in roles:
+            for language, marker in language_markers.items():
+                with self.subTest(caller_id=caller_id, language=language):
+                    status, body = self.post(
+                        "/support-requests",
+                        {
+                            "caller_id": caller_id,
+                            "lot_id": "MF-204",
+                            "intent": intent,
+                            "language": language,
+                        },
+                    )
+
+                    self.assertEqual(status, 200)
+                    self.assertEqual(body["language"], language)
+                    self.assertIn(marker, body["spoken_message"])
+
+    def test_support_endpoint_rejects_unsupported_language(self) -> None:
+        status, body = self.post(
+            "/support-requests",
+            {
+                "caller_id": "US-BUYER-001",
+                "lot_id": "MF-204",
+                "intent": "check_lot_status",
+                "language": "de",
+            },
+        )
+
+        self.assertEqual(status, 422)
+        self.assertIn("language", json.dumps(body))
 
     def test_spoken_aliases_do_not_guess_unknown_identifiers(self) -> None:
         unknown_caller_status, _ = self.post(

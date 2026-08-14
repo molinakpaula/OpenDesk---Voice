@@ -83,6 +83,22 @@ Run these as separate conversations:
 | Say `lot 999` | Do not invent a record; ask for the identifier once. |
 | Say `supplier two` | Do not guess a caller profile. |
 
+## Language independent from role
+
+Repeat the buyer-one, lot-204 request in three separate conversations and
+select or speak each supported language. Pass when the operational content
+remains buyer-specific while the response language changes:
+
+| Requested language | Expected response |
+| --- | --- |
+| English (`en`) | English buyer status with recorded moisture and shipment readiness. |
+| Spanish (`es`) | Spanish buyer status with the same fictional facts. |
+| Portuguese (`pt`) | Portuguese buyer status with the same fictional facts. |
+
+The ElevenLabs webhook must include the optional `language` body parameter for
+this test. Without it, the API safely uses the caller profile's preferred
+language.
+
 Canonical IDs are internal tool values. During routine confirmation, the voice
 agent should use natural role and lot wording instead of reading English codes
 such as `PE-SUPPLIER-001` or `transport_partner` aloud.

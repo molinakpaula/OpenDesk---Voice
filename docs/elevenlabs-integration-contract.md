@@ -68,11 +68,20 @@ Input schema:
         "check_documentation",
         "check_transport_readiness"
       ]
+    },
+    "language": {
+      "type": "string",
+      "enum": ["en", "es", "pt"],
+      "description": "Optional active conversation language. Defaults to the fictional caller profile's preferred language when omitted."
     }
   },
   "required": ["caller_id", "lot_id", "intent"]
 }
 ```
+
+`language` is optional so existing calls remain compatible. Supplying it lets
+any buyer, supplier, or transport-partner role receive its role-specific answer
+in English, Spanish, or Portuguese.
 
 The voice layer should speak `spoken_message` exactly as the authoritative
 operational answer. Structured fields are for control flow and display, not for

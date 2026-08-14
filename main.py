@@ -8,7 +8,7 @@ import unicodedata
 from datetime import datetime, time
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -118,27 +118,44 @@ def _build_voice_aliases(
 CALLER_VOICE_ALIASES = _build_voice_aliases(
     {
         "us-buyer-001": {
+            "US buyer 1",
             "US buyer one",
+            "United States buyer 1",
             "United States buyer one",
+            "buyer 1",
             "buyer one",
+            "comprador Estados Unidos 1",
             "comprador Estados Unidos uno",
+            "comprador 1",
             "comprador uno",
         },
         "pe-supplier-001": {
+            "PE supplier 1",
             "PE supplier one",
+            "Peru supplier 1",
             "Peru supplier one",
+            "supplier 1",
             "supplier one",
+            "proveedor Peru 1",
             "proveedor Peru uno",
             "proveedor Peru cero cero uno",
+            "proveedor 1",
             "proveedor uno",
+            "fornecedor Peru 1",
             "fornecedor Peru um",
         },
         "br-logistics-001": {
+            "BR logistics 1",
             "BR logistics one",
+            "Brazil logistics 1",
             "Brazil logistics one",
+            "logistics 1",
             "logistics one",
+            "Brazil transport partner 1",
             "Brazil transport partner one",
+            "logistica Brasil 1",
             "logistica Brasil um",
+            "parceiro de transporte Brasil 1",
             "parceiro de transporte Brasil um",
         },
     },
@@ -205,6 +222,7 @@ class SupportRequest(BaseModel):
     caller_id: str
     lot_id: str
     intent: str
+    language: Literal["en", "es", "pt"] | None = None
 
 
 LABELS = {
@@ -272,7 +290,7 @@ app = FastAPI(
         "A fictional multilingual API for wood-drying status and cross-border "
         "logistics coordination. Every organization, caller, and lot is fictional."
     ),
-    version="0.4.0",
+    version="0.5.0",
 )
 
 
@@ -531,7 +549,7 @@ def _require_tool_token(authorization: str | None = Header(default=None)) -> Non
 def _support_request_response(request: SupportRequest) -> dict[str, Any]:
     caller = _find_caller(request.caller_id)
     lot = _find_lot(request.lot_id)
-    language = caller["preferred_language"]["code"]
+    language = request.language or caller["preferred_language"]["code"]
     allowed_intent_by_role = {role: intent for intent, role in SUPPORTED_INTENTS.items()}
     supported_intents = set(SUPPORTED_INTENTS)
 
@@ -625,6 +643,8 @@ def get_voice_agent_config() -> dict[str, Any]:
                 "secret_required": True,
             },
             "required_fields": ["caller_id", "lot_id", "intent"],
+            "optional_fields": ["language"],
+            "language_values": sorted(SUPPORTED_LANGUAGE_CODES),
         },
         "support_hours": {
             "timezone": SUPPORT_HOURS["timezone"],
@@ -650,18 +670,22 @@ def get_caller(caller_id: str) -> dict[str, Any]:
 
 
 @app.get("/lots/{lot_id}")
-def get_lot(lot_id: str, caller_id: str) -> dict[str, Any]:
+def get_lot(
+    lot_id: str,
+    caller_id: str,
+    language: Literal["en", "es", "pt"] | None = None,
+) -> dict[str, Any]:
     """Return a fictional lot view tailored to the caller's role and language."""
     caller = _find_caller(caller_id)
     lot = _find_lot(lot_id)
-    language = caller["preferred_language"]["code"]
+    response_language = language or caller["preferred_language"]["code"]
 
     response_builders = {
         "buyer": _buyer_response,
         "supplier": _supplier_response,
         "transport_partner": _transport_response,
     }
-    role_view = response_builders[caller["caller_type"]](lot, language)
+    role_view = response_builders[caller["caller_type"]](lot, response_language)
 
     escalation_recommended = False
     if caller["caller_type"] == "buyer" and caller["support_priority"] == "high":
@@ -672,7 +696,7 @@ def get_lot(lot_id: str, caller_id: str) -> dict[str, Any]:
         "lot_id": lot["lot_id"],
         "caller_id": caller["caller_id"],
         "caller_type": caller["caller_type"],
-        "language": language,
+        "language": response_language,
         "escalation_recommended": escalation_recommended,
         **role_view,
     }
