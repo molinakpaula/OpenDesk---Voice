@@ -13,6 +13,7 @@ cross-border logistics support in English, Spanish, and Portuguese.
 
 **[Try the voice agent](https://elevenlabs.io/app/talk-to?agent_id=agent_2401kzxk9b7mf3jr3hw5dgcgsjtr&branch_id=agtbrch_3301kzxk9d3jf708fct42bcd8sfx)** ·
 **[Explore the live API](https://maderaflow-voice-support.onrender.com/docs)** ·
+**[Read the architecture](docs/architecture.md)** ·
 **[Open the reviewer checklist](docs/reviewer-demo-checklist.md)** ·
 **[Record the demo](docs/demo-video-script.md)**
 
@@ -93,6 +94,22 @@ This means the caller does not need to say “I am a buyer” or choose an inter
 intent. A caller ID can identify several lots, but it cannot identify one exact
 lot in a 1:N relationship; that is why one short lot-selection question remains
 necessary.
+
+## Architecture decisions and trade-offs
+
+The [architecture guide](docs/architecture.md) explains component boundaries
+and request flow. The [data-model guide](docs/data-model.md) explains the
+relationships. Short [Architecture Decision Records](docs/decisions/README.md)
+capture why the current choices were made and when they should change.
+
+| Decision | Current benefit | Current limitation | Future direction |
+| --- | --- | --- | --- |
+| Validated JSON instead of PostgreSQL | Simple, deterministic, and easy to review | No writes, transactions, concurrency, or history | PostgreSQL with migrations and audit records |
+| FastAPI owns role filtering | Privacy rules are deterministic and tested | Business-rule changes require deployment | Keep the boundary while moving records to repositories/database |
+| Caller-ID-first lookup | Natural voice flow; backend infers role and intent | Multiple lots require one selection question | Authenticated caller identity and remembered context |
+| Separate transport entity | Supports inbound and outbound movements | Needs an explicit current-movement rule | Scheduling and movement-event history |
+| Shared bearer token | Protects the ElevenLabs webhook simply | Authenticates the integration, not the caller | Signed requests plus caller authentication |
+| Python translations | Predictable wording in three tested languages | Copy changes require code deployment | Translation catalogs or reviewed content tooling |
 
 ## One-minute voice demo
 
@@ -294,9 +311,18 @@ quality problem. This is a support-routing signal, not an admission of liability
 
 ## Project files
 
-- `main.py` defines the FastAPI application, demonstration organization, caller and
-  relational configuration loading, assignment validation, context filtering,
-  multilingual messages, and API endpoints.
+- `main.py` is the stable four-line Uvicorn and Render entry point.
+- `maderaflow/api.py` defines FastAPI middleware, authentication dependencies,
+  public contracts, and HTTP routes.
+- `maderaflow/config.py` loads environment settings and validates all configured
+  relationships at startup without importing FastAPI.
+- `maderaflow/models.py` defines the typed webhook request and language codes.
+- `maderaflow/errors.py` defines domain errors without depending on FastAPI;
+  the API boundary translates them into HTTP responses.
+- `maderaflow/repositories.py` normalizes speech-friendly IDs and resolves
+  caller, lot, and transport assignments.
+- `maderaflow/support.py` owns role disclosure, intent inference, escalation,
+  translations, and voice-ready messages.
 - `config/maderaflow.json` contains editable demonstration organization, caller,
   wood-type, drying-status, lot, transport, escalation, and support-hours data.
   Keeping these facts outside Python makes the context configurable without
@@ -309,9 +335,13 @@ quality problem. This is a support-routing signal, not an admission of liability
   short reviewer-facing product demonstration without exposing secrets.
 - `docs/elevenlabs-agent-configuration.md` contains the reviewed system prompt,
   multilingual greetings, voice settings, and conversation tests.
+- `docs/architecture.md`, `docs/data-model.md`, and `docs/decisions/` explain
+  system boundaries, relationships, alternatives, and consequences.
 - `tests/test_main.py` sends automated requests through the application and
   checks successful responses, errors, language selection, role-specific
   content, escalation, and confidentiality boundaries.
+- `tests/test_architecture.py` protects the thin entry point, expected module
+  structure, framework-independent configuration, and decision records.
 - `.github/workflows/tests.yml` repeats the full suite on Python 3.11, 3.12,
   and 3.13 for every push to `main` and every pull request.
 - `requirements.txt` pins FastAPI, Uvicorn, and timezone data needed to reproduce
@@ -346,13 +376,13 @@ outside ElevenLabs.
 
 Edit `config/maderaflow.json` to change demonstration caller profiles, lot facts,
 enabled escalation triggers, or support hours. Restart the development server
-after saving the file. On startup, `main.py` checks that required sections exist,
-IDs match their configuration keys, and every caller uses a supported role and
-language.
+after saving the file. On startup, `maderaflow/config.py` checks that required
+sections exist, IDs match their configuration keys, and all caller, lot, wood,
+status, and transport references are valid.
 
-Translations remain in `main.py`. This keeps operational wording and role-based
-privacy behavior covered by automated tests. Do not put secrets or real
-customer, shipment, employee, or sensor data in the configuration file.
+Translations remain in `maderaflow/support.py`. This keeps operational wording
+and role-based privacy behavior covered by automated tests. Do not put secrets
+or real customer, shipment, employee, or sensor data in the configuration file.
 
 ## Start and try the backend
 

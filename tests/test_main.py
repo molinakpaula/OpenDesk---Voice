@@ -13,7 +13,8 @@ from zoneinfo import ZoneInfo
 
 os.environ.setdefault("MADERAFLOW_TOOL_TOKEN", "test-only-token")
 
-from main import DRYING_STATUSES, LOTS, TRANSPORTS, WOOD_TYPES, app
+from main import app
+from maderaflow.config import DRYING_STATUSES, LOTS, TRANSPORTS, WOOD_TYPES
 
 
 async def request(
@@ -600,7 +601,7 @@ class ApiTests(unittest.TestCase):
             "intent": "check_lot_status",
         }
 
-        with patch("main.MADERAFLOW_TOOL_TOKEN", None):
+        with patch("maderaflow.api.MADERAFLOW_TOOL_TOKEN", None):
             status, body = self.post("/support-requests", request_body)
 
         self.assertEqual(status, 503)
@@ -609,7 +610,7 @@ class ApiTests(unittest.TestCase):
     def test_unresolved_request_recommends_human_during_working_hours(self) -> None:
         working_time = datetime(2026, 8, 13, 10, 0, tzinfo=ZoneInfo("America/Lima"))
 
-        with patch("main._now_in_lima", return_value=working_time):
+        with patch("maderaflow.support.now_in_lima", return_value=working_time):
             status, body = self.post(
                 "/support-requests",
                 {
@@ -630,7 +631,7 @@ class ApiTests(unittest.TestCase):
     def test_unresolved_request_recommends_ticket_after_hours(self) -> None:
         after_hours = datetime(2026, 8, 13, 20, 0, tzinfo=ZoneInfo("America/Lima"))
 
-        with patch("main._now_in_lima", return_value=after_hours):
+        with patch("maderaflow.support.now_in_lima", return_value=after_hours):
             status, body = self.post(
                 "/support-requests",
                 {
