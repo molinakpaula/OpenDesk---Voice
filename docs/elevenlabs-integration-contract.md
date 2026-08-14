@@ -1,43 +1,47 @@
 # ElevenLabs Integration Contract
 
-This document describes how the demonstration ElevenLabs agent interacts with
-the fictional MaderaFlow API. ElevenLabs is configured to call the protected
-webhook directly, so this repository does not need an ElevenLabs SDK. API keys,
-bearer-token values, and other secrets are never stored in the repository.
+This document describes how the MaderaFlow demonstration agent calls the
+protected FastAPI webhook. The repository uses sample records only and contains
+no real customer, employee, supplier, or shipment data.
 
-Every organization, caller, and wood lot described here is fictional.
-
-## Agent identity and disclosure
-
-The agent name is **MaderaFlow Support**. At the beginning of a conversation it
-must identify itself as an automated voice assistant. It must not pretend to be
-a human employee.
-
-The current opening messages and public capabilities are available from:
-
-```http
-GET /voice-agent-config
-```
-
-## Conversation flow
+## Caller-first conversation flow
 
 ```text
-Caller speaks
-  -> voice layer identifies language and gathers caller ID, lot ID, and intent
-  -> voice layer calls POST /support-requests
-  -> API validates fictional context and applies role/privacy rules
-  -> voice layer speaks only the returned spoken_message
-  -> unresolved request becomes a human handoff or ticket recommendation
+Caller gives caller ID
+  -> ElevenLabs sends caller_id and active language
+  -> API identifies the caller role and assigned wood lots
+  -> one assigned lot: API can resolve it automatically
+  -> several assigned lots: API returns available_lots and ask_for_lot
+  -> caller selects the three-digit lot number
+  -> API verifies the assignment and infers the role-specific intent
+  -> ElevenLabs speaks only spoken_message
 ```
 
-The voice layer should ask a clarifying question when a required value is
-missing. It must not guess a caller ID, lot ID, measurement, or operational fact.
+The API, rather than the language model, is responsible for role recognition,
+lot authorization, and intent inference. This keeps the conversation simple and
+prevents a caller from selecting an unrelated role or lot.
+
+## Relationship model
+
+`WOOD_LOT` is the central entity:
+
+```text
+BUYER       1 ----< N WOOD_LOT
+PROVIDER    1 ----< N WOOD_LOT
+WOOD_TYPE   1 ----< N WOOD_LOT
+DRYING_STATUS 1 --< N WOOD_LOT
+
+WOOD_LOT 1 ----< N TRANSPORT >---- 1 TRANSPORTER
+```
+
+A lot contains `buyer_id`, `provider_id`, `wood_type_id`, and
+`drying_status_id`. It does not contain `transporter_id`. Transport is separate
+because a lot can have an inbound movement to the drying facility followed by
+an outbound movement to the buyer.
 
 ## API tool definition
 
 Tool name: `get_maderaflow_support_response`
-
-Method and path:
 
 ```http
 POST /support-requests
@@ -53,13 +57,11 @@ Input schema:
   "properties": {
     "caller_id": {
       "type": "string",
-      "enum": ["US-BUYER-001", "PE-SUPPLIER-001", "BR-LOGISTICS-001"],
-      "description": "Canonical fictional caller ID. Convert only an approved spoken alias from the agent prompt to one of these values."
+      "description": "Caller ID supplied by the caller. Ask for it if missing and never guess it."
     },
     "lot_id": {
       "type": "string",
-      "enum": ["MF-204", "MF-317", "MF-422"],
-      "description": "Canonical fictional MaderaFlow lot ID. Spoken forms such as lot 204 must be mapped to the matching value."
+      "description": "Optional selected lot ID. Omit it on the first call if the caller has not selected a lot."
     },
     "intent": {
       "type": "string",
@@ -67,118 +69,85 @@ Input schema:
         "check_lot_status",
         "check_documentation",
         "check_transport_readiness"
-      ]
+      ],
+      "description": "Optional because the API infers the intent from the assigned caller role."
     },
     "language": {
       "type": "string",
       "enum": ["en", "es", "pt"],
-      "description": "Optional active conversation language. Defaults to the fictional caller profile's preferred language when omitted."
+      "description": "Optional active conversation language. Defaults to the caller profile's preferred language."
     }
   },
-  "required": ["caller_id", "lot_id", "intent"]
+  "required": ["caller_id"]
 }
 ```
 
-`language` is optional so existing calls remain compatible. Supplying it lets
-any buyer, supplier, or transport-partner role receive its role-specific answer
-in English, Spanish, or Portuguese.
+## Caller-only response
 
-The voice layer should speak `spoken_message` exactly as the authoritative
-operational answer. Structured fields are for control flow and display, not for
-inventing extra spoken details.
+When a caller has several assigned lots, a request such as:
 
-## Bearer-token setup
+```json
+{
+  "caller_id": "US-BUYER-001",
+  "language": "en"
+}
+```
 
-The operational endpoint requires one shared secret. Never put its value in
-this repository, a prompt, a conversation, or a support message.
+returns control information similar to:
 
-1. Generate a random token locally.
-2. Add it to Render as `MADERAFLOW_TOOL_TOKEN`.
-3. In the ElevenLabs webhook tool, add the `Authorization` header, select
-   **Secret**, and store the value as `Bearer <your token>`.
+```json
+{
+  "resolved": false,
+  "reason": "lot_selection_required",
+  "next_action": "ask_for_lot",
+  "available_lots": ["MF-204", "MF-317", "MF-422"],
+  "spoken_message": "I found three assigned wood lots..."
+}
+```
 
-The same token value must be used on both sides. Public endpoints such as
-`/health` and `/voice-agent-config` do not require it.
+ElevenLabs should speak `spoken_message`, collect one of those lot numbers, and
+call the same tool again. It must not invent or select a lot for the caller.
 
-## Intent and role mapping
+## Resolved request
 
-| Intent | Allowed caller type | Returned context |
-| --- | --- | --- |
-| `check_lot_status` | Buyer | Drying, recorded moisture, estimate, shipment readiness |
-| `check_documentation` | Supplier | Receipt, documents, supplier action |
-| `check_transport_readiness` | Transport partner | Collection, destination, scheduling |
-
-If the intent is unknown or unavailable for the caller's role, the API returns
-`resolved: false` and a localized safe next step.
-
-## Handoff and ticket routing
-
-Fictional support hours are Monday–Friday, 08:00–18:00 in `America/Lima`.
-Holidays are not modeled.
-
-- During support hours, use `next_action: human_handoff` to transfer to a human.
-- Outside support hours, explain that a ticket is recommended.
-- `ticket_created: false` means no ticket exists yet. The voice layer must not
-  claim that a ticket was created or provide an invented ticket number.
-
-## Safety instructions for the voice agent
-
-- Use only facts returned by the API.
-- Say "latest recorded moisture," never "live moisture."
-- Treat completion dates as estimates and never guarantees.
-- Do not give legal or customs advice.
-- Do not admit liability.
-- Do not reveal information outside the caller's role.
-- Do not disclose buyer or pricing details to transport partners.
-- When the API cannot resolve a request, use its handoff or ticket guidance.
-
-## English example
-
-Caller: "This is US-BUYER-001. What is the status of lot MF-204?"
-
-Tool request:
+Once the caller chooses a lot, this minimal request is sufficient:
 
 ```json
 {
   "caller_id": "US-BUYER-001",
   "lot_id": "MF-204",
-  "intent": "check_lot_status"
+  "language": "en"
 }
 ```
 
-The voice layer speaks the English `spoken_message` returned by the API,
-including that the completion date is estimated and not guaranteed.
+The backend recognizes the caller as a buyer, verifies that the lot is assigned
+to that buyer, and infers `check_lot_status`. Providers receive documentation
+information, while transport partners receive only their relevant transport
+movement, collection readiness, destination, and scheduling status.
 
-## Spanish example
+## Authentication
 
-Caller: "Soy PE-SUPPLIER-001. ¿Falta documentación para el lote MF-317?"
+The operational endpoint requires a shared bearer token. Never place the value
+in this repository, a prompt, a conversation, or a support message.
 
-Tool request:
+1. Keep the token in Render as `MADERAFLOW_TOOL_TOKEN`.
+2. Keep the matching value in the ElevenLabs secret used by the
+   `Authorization` header.
+3. Store the ElevenLabs value as `Bearer <your token>`.
 
-```json
-{
-  "caller_id": "PE-SUPPLIER-001",
-  "lot_id": "MF-317",
-  "intent": "check_documentation"
-}
-```
+## Handoff and ticket routing
 
-The response uses Spanish and describes only receipt, documentation, and the
-fictional supplier action.
+Demonstration support hours are Monday–Friday, 08:00–18:00 in `America/Lima`.
 
-## Portuguese example
+- During support hours, `human_handoff` recommends a specialist.
+- Outside support hours, `open_ticket` recommends a ticket.
+- `ticket_created: false` means no ticket exists yet.
 
-Caller: "Sou BR-LOGISTICS-001. O transporte do lote MF-422 pode ser agendado?"
+## Safety rules
 
-Tool request:
-
-```json
-{
-  "caller_id": "BR-LOGISTICS-001",
-  "lot_id": "MF-422",
-  "intent": "check_transport_readiness"
-}
-```
-
-The response uses Portuguese and includes only collection readiness,
-destination, and scheduling status—never buyer or pricing information.
+- Speak only facts returned in `spoken_message`.
+- Describe moisture as the latest recorded value, never as live.
+- Treat completion dates as estimates, never guarantees.
+- Do not provide legal or customs advice or admit liability.
+- Do not reveal information outside the caller's assigned role and lots.
+- Do not disclose buyer or pricing details to transport partners.

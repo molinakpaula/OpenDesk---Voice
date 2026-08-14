@@ -1,7 +1,7 @@
 {
   "organization": {
     "name": "MaderaFlow",
-    "fictional": true,
+    "demonstration_data": true,
     "industry": "Wood drying and cross-border logistics coordination",
     "headquarters": "Puerto Maldonado, Peru",
     "supported_languages": {
@@ -17,7 +17,7 @@
   "callers": {
     "us-buyer-001": {
       "caller_id": "US-BUYER-001",
-      "fictional": true,
+      "demonstration_data": true,
       "location": "Houston, United States",
       "department": "Procurement",
       "caller_type": "buyer",
@@ -30,7 +30,7 @@
     },
     "pe-supplier-001": {
       "caller_id": "PE-SUPPLIER-001",
-      "fictional": true,
+      "demonstration_data": true,
       "location": "Puerto Maldonado, Peru",
       "department": "Supplier Operations",
       "caller_type": "supplier",
@@ -43,7 +43,7 @@
     },
     "br-logistics-001": {
       "caller_id": "BR-LOGISTICS-001",
-      "fictional": true,
+      "demonstration_data": true,
       "location": "Rio Branco, Brazil",
       "department": "Logistics",
       "caller_type": "transport_partner",
@@ -55,15 +55,48 @@
       "unit_system": "metric"
     }
   },
+  "wood_types": {
+    "wt-peruvian-walnut": {
+      "wood_type_id": "WT-PERUVIAN-WALNUT",
+      "name": "Peruvian walnut"
+    },
+    "wt-spanish-cedar": {
+      "wood_type_id": "WT-SPANISH-CEDAR",
+      "name": "Spanish cedar"
+    },
+    "wt-brazilian-teak": {
+      "wood_type_id": "WT-BRAZILIAN-TEAK",
+      "name": "Brazilian teak"
+    }
+  },
+  "drying_statuses": {
+    "ds-on-schedule": {
+      "drying_status_id": "DS-ON-SCHEDULE",
+      "code": "drying_on_schedule"
+    },
+    "ds-delayed": {
+      "drying_status_id": "DS-DELAYED",
+      "code": "delayed"
+    },
+    "ds-quality-hold": {
+      "drying_status_id": "DS-QUALITY-HOLD",
+      "code": "quality_hold"
+    }
+  },
   "lots": {
     "mf-204": {
       "lot_id": "MF-204",
-      "fictional": true,
-      "species": "Peruvian walnut",
+      "demonstration_data": true,
+      "buyer_id": "US-BUYER-001",
+      "provider_id": "PE-SUPPLIER-001",
+      "wood_type_id": "WT-PERUVIAN-WALNUT",
+      "drying_status_id": "DS-ON-SCHEDULE",
       "volume_board_feet": 18000,
+      "initial_moisture_percentage": 28.0,
       "current_moisture_percentage": 12.8,
       "target_moisture_percentage": 10.0,
-      "drying_status": "drying_on_schedule",
+      "arrival_date": "2026-08-01",
+      "drying_start_date": "2026-08-02",
       "estimated_completion_date": "2026-08-20",
       "required_date": "2026-08-25",
       "destination": "Houston, United States",
@@ -77,12 +110,17 @@
     },
     "mf-317": {
       "lot_id": "MF-317",
-      "fictional": true,
-      "species": "Spanish cedar",
+      "demonstration_data": true,
+      "buyer_id": "US-BUYER-001",
+      "provider_id": "PE-SUPPLIER-001",
+      "wood_type_id": "WT-SPANISH-CEDAR",
+      "drying_status_id": "DS-DELAYED",
       "volume_board_feet": 12500,
+      "initial_moisture_percentage": 31.0,
       "current_moisture_percentage": 18.4,
       "target_moisture_percentage": 12.0,
-      "drying_status": "delayed",
+      "arrival_date": "2026-08-03",
+      "drying_start_date": "2026-08-04",
       "estimated_completion_date": "2026-08-29",
       "required_date": "2026-08-24",
       "destination": "Miami, United States",
@@ -96,12 +134,17 @@
     },
     "mf-422": {
       "lot_id": "MF-422",
-      "fictional": true,
-      "species": "Brazilian teak",
+      "demonstration_data": true,
+      "buyer_id": "US-BUYER-001",
+      "provider_id": "PE-SUPPLIER-001",
+      "wood_type_id": "WT-BRAZILIAN-TEAK",
+      "drying_status_id": "DS-QUALITY-HOLD",
       "volume_board_feet": 22000,
+      "initial_moisture_percentage": 25.5,
       "current_moisture_percentage": 10.5,
       "target_moisture_percentage": 10.0,
-      "drying_status": "quality_hold",
+      "arrival_date": "2026-08-02",
+      "drying_start_date": "2026-08-03",
       "estimated_completion_date": "2026-08-22",
       "required_date": "2026-08-23",
       "destination": "Rio Branco, Brazil",
@@ -112,6 +155,44 @@
       "supplier_action": "none",
       "quality_problem_recorded": true,
       "near_required_date": true
+    }
+  },
+  "transports": {
+    "tr-204-inbound": {
+      "transport_id": "TR-204-INBOUND",
+      "lot_id": "MF-204",
+      "transporter_id": "BR-LOGISTICS-001",
+      "sequence": 1,
+      "origin": "Supplier site, Peru",
+      "destination": "MaderaFlow drying facility, Puerto Maldonado",
+      "status": "completed"
+    },
+    "tr-204-outbound": {
+      "transport_id": "TR-204-OUTBOUND",
+      "lot_id": "MF-204",
+      "transporter_id": "BR-LOGISTICS-001",
+      "sequence": 2,
+      "origin": "MaderaFlow drying facility, Puerto Maldonado",
+      "destination": "Houston, United States",
+      "status": "awaiting_lot_readiness"
+    },
+    "tr-317-outbound": {
+      "transport_id": "TR-317-OUTBOUND",
+      "lot_id": "MF-317",
+      "transporter_id": "BR-LOGISTICS-001",
+      "sequence": 1,
+      "origin": "MaderaFlow drying facility, Puerto Maldonado",
+      "destination": "Miami, United States",
+      "status": "awaiting_lot_readiness"
+    },
+    "tr-422-outbound": {
+      "transport_id": "TR-422-OUTBOUND",
+      "lot_id": "MF-422",
+      "transporter_id": "BR-LOGISTICS-001",
+      "sequence": 1,
+      "origin": "MaderaFlow drying facility, Puerto Maldonado",
+      "destination": "Rio Branco, Brazil",
+      "status": "quality_hold"
     }
   },
   "escalation_triggers": {

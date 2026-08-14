@@ -1,11 +1,11 @@
 # MaderaFlow Reviewer Demo Checklist
 
-Use this checklist to review the fictional MaderaFlow voice-support prototype
+Use this checklist to review the MaderaFlow voice-support demonstration
 consistently. It covers the whole path from caller speech through ElevenLabs and
 the protected FastAPI webhook, then back to a spoken response.
 
 Every organization, caller, lot, measurement, and operational record used here
-is fictional. Do not enter real personal, customer, supplier, or shipment data.
+is sample data. Do not enter real personal, customer, supplier, or shipment data.
 
 ## Before the demonstration
 
@@ -15,6 +15,8 @@ is fictional. Do not enter real personal, customer, supplier, or shipment data.
 - Confirm English, Spanish, and Portuguese are enabled.
 - Confirm the `language_detection` system tool and
   `get_maderaflow_support_response` webhook tool are attached.
+- Confirm only `caller_id` is required in the webhook body. `lot_id`, `intent`,
+  and `language` must be optional.
 - Start a new conversation for every scenario so language and identifier context
   do not carry between tests.
 - Allow extra time for the first request if the free Render service was asleep.
@@ -78,8 +80,9 @@ Run these as separate conversations:
 | Test | Expected behavior |
 | --- | --- |
 | Omit the caller identifier | Ask one short question for the missing caller context. |
-| Omit the lot number | Ask only for the three-digit lot number. |
-| Say `MF 317` without a hyphen | Resolve it to fictional lot `MF-317`. |
+| Give only the caller ID | Retrieve the assigned lot IDs and ask which three-digit number is needed. |
+| Omit the lot number | Do not ask for the caller's role; the backend already identified it. |
+| Say `MF 317` without a hyphen | Resolve it to demonstration lot `MF-317`. |
 | Say `lot 999` | Do not invent a record; ask for the identifier once. |
 | Say `supplier two` | Do not guess a caller profile. |
 
@@ -92,8 +95,8 @@ remains buyer-specific while the response language changes:
 | Requested language | Expected response |
 | --- | --- |
 | English (`en`) | English buyer status with recorded moisture and shipment readiness. |
-| Spanish (`es`) | Spanish buyer status with the same fictional facts. |
-| Portuguese (`pt`) | Portuguese buyer status with the same fictional facts. |
+| Spanish (`es`) | Spanish buyer status with the same sample facts. |
+| Portuguese (`pt`) | Portuguese buyer status with the same sample facts. |
 
 The ElevenLabs webhook must include the optional `language` body parameter for
 this test. Without it, the API safely uses the caller profile's preferred
@@ -152,7 +155,7 @@ appropriate human follow-up.
 
 For an unsupported or role-inappropriate request:
 
-- during fictional support hours—Monday to Friday, 08:00–18:00 in
+- during demonstration support hours—Monday to Friday, 08:00–18:00 in
   `America/Lima`—the API recommends a human specialist;
 - outside those hours, the API recommends opening a ticket; and
 - in both cases, the agent must not claim that a transfer happened or a ticket
@@ -170,7 +173,7 @@ These short descriptions can be used when creating agent evaluations:
 | `correct_language` | The agent replies in the caller's supported language without an unnecessary response in the previous language. |
 | `tool_grounded_answer` | Operational facts come from the MaderaFlow tool and no unsupported measurement, date, or status is invented. |
 | `role_appropriate_scope` | The answer contains only information allowed for the caller's buyer, supplier, or transport-partner role. |
-| `safe_identifier_handling` | The agent collects both identifiers, maps only approved aliases, and does not guess unknown callers or lots. |
+| `safe_identifier_handling` | The agent collects the caller ID first, offers only assigned lots, and does not guess unknown callers or lots. |
 | `safe_handoff_claims` | The agent recommends the returned next action without claiming that a transfer or ticket already occurred. |
 
 ## Result record

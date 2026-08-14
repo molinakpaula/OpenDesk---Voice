@@ -1,4 +1,4 @@
-"""HTTP-level tests for the fictional MaderaFlow support API."""
+"""HTTP-level tests for the MaderaFlow support demonstration API."""
 
 import asyncio
 import json
@@ -13,13 +13,13 @@ from zoneinfo import ZoneInfo
 
 os.environ.setdefault("MADERAFLOW_TOOL_TOKEN", "test-only-token")
 
-from main import LOTS, app
+from main import DRYING_STATUSES, LOTS, TRANSPORTS, WOOD_TYPES, app
 
 
 async def request(
     url: str,
     method: str = "GET",
-    json_body: dict[str, str] | None = None,
+    json_body: dict[str, Any] | None = None,
     headers: list[tuple[bytes, bytes]] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Send one GET request directly through the ASGI application."""
@@ -77,7 +77,7 @@ class ApiTests(unittest.TestCase):
     def get(self, url: str) -> tuple[int, dict[str, Any]]:
         return asyncio.run(request(url))
 
-    def post(self, url: str, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
+    def post(self, url: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         return asyncio.run(
             request(
                 url,
@@ -90,7 +90,7 @@ class ApiTests(unittest.TestCase):
     def post_without_token(
         self,
         url: str,
-        body: dict[str, str],
+        body: dict[str, Any],
     ) -> tuple[int, dict[str, Any]]:
         return asyncio.run(request(url, method="POST", json_body=body))
 
@@ -125,7 +125,7 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertEqual(body["name"], "MaderaFlow")
-        self.assertTrue(body["fictional"])
+        self.assertTrue(body["demonstration_data"])
         self.assertEqual(body["headquarters"], "Puerto Maldonado, Peru")
         self.assertEqual(set(body["supported_languages"]), {"en", "es", "pt"})
 
@@ -149,10 +149,14 @@ class ApiTests(unittest.TestCase):
         )
         self.assertEqual(
             body["tool"]["required_fields"],
-            ["caller_id", "lot_id", "intent"],
+            ["caller_id"],
         )
-        self.assertEqual(body["tool"]["optional_fields"], ["language"])
+        self.assertEqual(
+            body["tool"]["optional_fields"],
+            ["lot_id", "intent", "language"],
+        )
         self.assertEqual(body["tool"]["language_values"], ["en", "es", "pt"])
+        self.assertEqual(body["relationship_model"]["central_entity"], "wood_lot")
 
     def test_voice_agent_config_does_not_expose_caller_or_lot_records(self) -> None:
         status, body = self.get("/voice-agent-config")
@@ -171,7 +175,12 @@ class ApiTests(unittest.TestCase):
     def test_configured_lots_contain_required_operational_fields(self) -> None:
         required_fields = {
             "species",
+            "buyer_id",
+            "provider_id",
+            "wood_type_id",
+            "drying_status_id",
             "volume_board_feet",
+            "initial_moisture_percentage",
             "current_moisture_percentage",
             "target_moisture_percentage",
             "drying_status",
@@ -189,6 +198,29 @@ class ApiTests(unittest.TestCase):
         for lot in LOTS.values():
             with self.subTest(lot_id=lot["lot_id"]):
                 self.assertTrue(required_fields.issubset(lot))
+                self.assertNotIn("transporter_id", lot)
+
+    def test_lot_relationships_and_separate_transports_are_valid(self) -> None:
+        wood_type_ids = {item["wood_type_id"] for item in WOOD_TYPES.values()}
+        drying_status_ids = {
+            item["drying_status_id"] for item in DRYING_STATUSES.values()
+        }
+        transport_counts: dict[str, int] = {}
+
+        for lot in LOTS.values():
+            self.assertEqual(lot["buyer_id"], "US-BUYER-001")
+            self.assertEqual(lot["provider_id"], "PE-SUPPLIER-001")
+            self.assertIn(lot["wood_type_id"], wood_type_ids)
+            self.assertIn(lot["drying_status_id"], drying_status_ids)
+
+        for transport in TRANSPORTS.values():
+            self.assertIn(transport["lot_id"], {lot["lot_id"] for lot in LOTS.values()})
+            self.assertEqual(transport["transporter_id"], "BR-LOGISTICS-001")
+            transport_counts[transport["lot_id"]] = (
+                transport_counts.get(transport["lot_id"], 0) + 1
+            )
+
+        self.assertGreaterEqual(transport_counts["MF-204"], 2)
 
     def test_all_three_caller_profiles(self) -> None:
         expected_types = {
@@ -203,7 +235,23 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertEqual(body["caller_id"], caller_id)
                 self.assertEqual(body["caller_type"], caller_type)
-                self.assertTrue(body["fictional"])
+                self.assertTrue(body["demonstration_data"])
+
+    def test_caller_id_returns_assigned_lots_for_every_role(self) -> None:
+        for caller_id in (
+            "US-BUYER-001",
+            "PE-SUPPLIER-001",
+            "BR-LOGISTICS-001",
+        ):
+            with self.subTest(caller_id=caller_id):
+                status, body = self.get(f"/callers/{caller_id}/lots")
+
+                self.assertEqual(status, 200)
+                self.assertEqual(body["assigned_lot_count"], 3)
+                self.assertEqual(
+                    body["assigned_lot_ids"],
+                    ["MF-204", "MF-317", "MF-422"],
+                )
 
     def test_all_supported_languages(self) -> None:
         examples = {
@@ -287,13 +335,13 @@ class ApiTests(unittest.TestCase):
         status, body = self.get("/lots/MF-204?caller_id=UNKNOWN")
 
         self.assertEqual(status, 404)
-        self.assertIn("Unknown fictional caller", body["detail"])
+        self.assertIn("Unknown caller", body["detail"])
 
     def test_unknown_lot_returns_404(self) -> None:
         status, body = self.get("/lots/MF-999?caller_id=US-BUYER-001")
 
         self.assertEqual(status, 404)
-        self.assertIn("Unknown fictional lot", body["detail"])
+        self.assertIn("Unknown lot", body["detail"])
 
     def test_transport_response_excludes_confidential_buyer_information(self) -> None:
         status, body = self.get("/lots/MF-204?caller_id=BR-LOGISTICS-001")
@@ -324,6 +372,53 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(body["intent"], intent)
                 self.assertTrue(body["spoken_message"])
                 self.assertFalse(body["ticket_created"])
+
+    def test_caller_only_request_asks_for_assigned_lot(self) -> None:
+        status, body = self.post(
+            "/support-requests",
+            {"caller_id": "US buyer 1", "language": "en"},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertFalse(body["resolved"])
+        self.assertEqual(body["reason"], "lot_selection_required")
+        self.assertEqual(body["next_action"], "ask_for_lot")
+        self.assertEqual(body["available_lots"], ["MF-204", "MF-317", "MF-422"])
+        self.assertNotIn("latest_recorded_moisture_percentage", body)
+
+    def test_blank_optional_fields_are_treated_as_missing(self) -> None:
+        status, body = self.post(
+            "/support-requests",
+            {
+                "caller_id": "PE-SUPPLIER-001",
+                "lot_id": "",
+                "intent": "",
+                "language": "es",
+            },
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["next_action"], "ask_for_lot")
+        self.assertEqual(body["language"], "es")
+
+    def test_intent_is_inferred_from_caller_role(self) -> None:
+        examples = (
+            ("US-BUYER-001", "MF-204", "check_lot_status"),
+            ("PE-SUPPLIER-001", "MF-317", "check_documentation"),
+            ("BR-LOGISTICS-001", "MF-422", "check_transport_readiness"),
+        )
+
+        for caller_id, lot_id, expected_intent in examples:
+            with self.subTest(caller_id=caller_id):
+                status, body = self.post(
+                    "/support-requests",
+                    {"caller_id": caller_id, "lot_id": lot_id},
+                )
+
+                self.assertEqual(status, 200)
+                self.assertTrue(body["resolved"])
+                self.assertEqual(body["intent"], expected_intent)
+                self.assertTrue(body["intent_inferred"])
 
     def test_support_endpoint_accepts_spoken_aliases_in_all_languages(self) -> None:
         examples = [

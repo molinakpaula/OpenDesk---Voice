@@ -4,20 +4,19 @@
 [![Live API](https://img.shields.io/badge/API-live%20on%20Render-46E3B7)](https://maderaflow-voice-support.onrender.com/health)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-3776AB)](https://www.python.org/)
 
-A contextual multilingual voice-agent prototype for fictional wood drying and
+A contextual multilingual voice-agent demonstration for wood drying and
 cross-border logistics support in English, Spanish, and Portuguese.
 
-> **Fictional demonstration:** MaderaFlow, every caller profile, every lot,
-> every measurement, and every operational record in this repository are
-> fictional. No real customer, employee, shipment, supplier, or sensor data is
-> used.
+> **Demonstration data:** Every caller profile, lot, measurement, transport,
+> and operational record in this repository is sample data. No real customer,
+> employee, shipment, supplier, or sensor data is used.
 
 **[Try the voice agent](https://elevenlabs.io/app/talk-to?agent_id=agent_2401kzxk9b7mf3jr3hw5dgcgsjtr&branch_id=agtbrch_3301kzxk9d3jf708fct42bcd8sfx)** ·
 **[Explore the live API](https://maderaflow-voice-support.onrender.com/docs)** ·
 **[Open the reviewer checklist](docs/reviewer-demo-checklist.md)** ·
 **[Record the demo](docs/demo-video-script.md)**
 
-MaderaFlow represents a fictional company headquartered in Puerto Maldonado,
+MaderaFlow represents a demonstration company headquartered in Puerto Maldonado,
 Peru. It coordinates wood drying and cross-border logistics for suppliers,
 manufacturers, buyers, and transport partners across Peru, Brazil, and the
 United States.
@@ -28,7 +27,9 @@ United States.
 | --- | --- |
 | Multilingual voice | One ElevenLabs agent supports English, Spanish, and Portuguese. |
 | Contextual answers | Buyer, supplier, and transport-partner responses expose different information. |
-| Grounded operations | FastAPI returns fixed fictional lot facts and voice-ready messages. |
+| Grounded operations | FastAPI returns fixed sample lot facts and voice-ready messages. |
+| Caller-first lookup | The caller provides one ID; the backend identifies the role and assigned lots. |
+| Relational context | Wood lots reference buyers, providers, wood types, and drying statuses; transport movements are separate. |
 | Speech-friendly IDs | Approved natural aliases are normalized to stable internal identifiers. |
 | Guardrails | The agent avoids live-data claims, guarantees, legal advice, liability, and role-inappropriate information. |
 | Safe follow-up | Unresolved requests recommend a human during working hours or a ticket after hours; no transfer or ticket is falsely claimed. |
@@ -47,7 +48,7 @@ flowchart LR
     Transport[Transport view]
 
     Caller -->|speech| Voice
-    Voice -->|caller ID · lot ID · intent| Tool
+    Voice -->|caller ID first; optional lot and language| Tool
     Tool --> API
     API --> Context
     Context --> Buyer
@@ -58,8 +59,40 @@ flowchart LR
 ```
 
 ElevenLabs handles listening, language switching, conversation flow, and
-speech. FastAPI remains the source of truth for fictional operational facts,
+speech. FastAPI remains the source of truth for sample operational facts,
 role filtering, escalation signals, and translated support messages.
+
+## Relationship model
+
+The wood lot is the central business record. A buyer or provider can be linked
+to many lots, while every lot points to one wood type and one drying status.
+
+```mermaid
+erDiagram
+    BUYER ||--o{ WOOD_LOT : purchases
+    PROVIDER ||--o{ WOOD_LOT : supplies
+    WOOD_TYPE ||--o{ WOOD_LOT : classifies
+    DRYING_STATUS ||--o{ WOOD_LOT : describes
+    WOOD_LOT ||--o{ TRANSPORT : requires
+    TRANSPORTER ||--o{ TRANSPORT : performs
+```
+
+Transport is a separate entity rather than a `transporter_id` directly on the
+lot. This supports multiple movements for the same lot—for example, provider to
+drying facility and later drying facility to buyer. `MF-204` demonstrates this
+with an inbound and an outbound transport record.
+
+## Caller-ID-first flow
+
+The voice agent asks for the caller ID first. The API then identifies the
+caller's role and assigned lots. If several lots are assigned, it returns only
+their IDs and asks the caller to choose a three-digit number. After selection,
+the API verifies the relationship and infers the correct intent from the role.
+
+This means the caller does not need to say “I am a buyer” or choose an internal
+intent. A caller ID can identify several lots, but it cannot identify one exact
+lot in a 1:N relationship; that is why one short lot-selection question remains
+necessary.
 
 ## One-minute voice demo
 
@@ -78,7 +111,7 @@ The complete expected results and safety tests are in the
 ## Why caller context matters
 
 The same lot should not produce one generic answer for everyone. The API uses a
-fictional caller profile to select the caller's language and reveal only the
+demonstration caller profile to select the caller's language and reveal only the
 information relevant to that role:
 
 - A **buyer** hears drying progress, the latest recorded moisture value, the
@@ -96,7 +129,7 @@ instead of a generic voice assistant.
 
 The protected voice endpoint accepts the active conversation language and
 returns `spoken_message` in that language. If the voice layer omits it, the
-fictional caller profile's preferred language is used as the default:
+caller profile's preferred language is used as the default:
 
 | Code | Language |
 | --- | --- |
@@ -104,7 +137,7 @@ fictional caller profile's preferred language is used as the default:
 | `es` | Spanish |
 | `pt` | Portuguese |
 
-## Fictional caller profiles
+## Demonstration caller profiles
 
 | Caller ID | Role | Location | Language | Priority |
 | --- | --- | --- | --- | --- |
@@ -113,7 +146,7 @@ fictional caller profile's preferred language is used as the default:
 | `BR-LOGISTICS-001` | Transport partner | Rio Branco, Brazil | Portuguese | Normal |
 
 Caller and lot IDs are case-insensitive, so `mf-204` and `MF-204` refer to the
-same fictional lot. The voice endpoint also accepts carefully limited spoken
+same demonstration lot. The voice endpoint also accepts carefully limited spoken
 aliases because speech recognition often removes hyphens or writes letters as
 words. It returns the canonical ID in every successful response.
 
@@ -141,18 +174,19 @@ An API endpoint is an address where another program asks the backend for
 information. A `GET` request retrieves information without changing it.
 
 - `GET /health` confirms that the backend can respond.
-- `GET /organization` returns the fictional organization and languages.
+- `GET /organization` returns the demonstration organization and languages.
 - `GET /voice-agent-config` returns a public, non-sensitive contract for a
   voice layer.
-- `GET /callers/{caller_id}` returns one fictional caller profile.
+- `GET /callers/{caller_id}` returns one demonstration caller profile.
+- `GET /callers/{caller_id}/lots` returns the lot IDs assigned to that caller.
 - `GET /lots/{lot_id}?caller_id={caller_id}&language={language}` returns a
   role-specific response in an optional supported language.
-- `POST /support-requests` accepts structured context from the ElevenLabs voice
-  layer and handles lot status, documentation, and transport-readiness intents.
+- `POST /support-requests` requires only `caller_id`. It finds assigned lots and
+  infers the role-specific intent; `lot_id`, `intent`, and `language` are optional.
 - `GET /docs` opens FastAPI's interactive API documentation.
 
 Unknown caller and lot IDs return `404 Not Found`, meaning the requested
-fictional record does not exist.
+demonstration record does not exist.
 
 ## Example requests
 
@@ -182,23 +216,31 @@ different role and preferred language.
 
 ## Voice-ready support requests
 
-The voice layer sends one JSON request after identifying the caller, lot, and
-intent:
+The first tool request can contain only the caller ID and active language:
 
 ```json
 {
-  "caller_id": "PE-SUPPLIER-001",
-  "lot_id": "MF-317",
-  "intent": "check_documentation",
-  "language": "es"
+  "caller_id": "US-BUYER-001",
+  "language": "en"
 }
 ```
 
-For reliable speech handling, configure the ElevenLabs `caller_id` body
-parameter with the three canonical caller IDs as predefined values. Configure
-`lot_id` with `MF-204`, `MF-317`, and `MF-422`. The agent prompt maps approved
-spoken phrases to these stable values, and the backend independently recognizes
-the same aliases as a defensive fallback.
+Because this buyer has three assigned lots, the API returns `available_lots`
+and `next_action: ask_for_lot`. After the caller chooses one, the second request
+can remain minimal:
+
+```json
+{
+  "caller_id": "US-BUYER-001",
+  "lot_id": "MF-204",
+  "language": "en"
+}
+```
+
+Only `caller_id` is required. Configure `lot_id`, `intent`, and `language` as
+optional ElevenLabs body properties. The backend infers `check_lot_status`,
+`check_documentation`, or `check_transport_readiness` from the assigned caller
+role when `intent` is omitted.
 
 Canonical IDs and internal English role codes are for software integration, not
 for routine speech. The voice agent should confirm them with natural localized
@@ -211,7 +253,7 @@ example, `US-BUYER-001` can receive its buyer-specific lot-status answer in
 Spanish by sending `"language": "es"`; omitting the field keeps English as that
 profile's default.
 
-Supported intents are:
+The inferred intents are:
 
 - `check_lot_status` for a buyer;
 - `check_documentation` for a supplier; and
@@ -224,7 +266,7 @@ structured fields retain stable codes for software integrations.
 
 ## Human support and after-hours routing
 
-Fictional support hours are Monday through Friday, 08:00–18:00 in the
+Demonstration support hours are Monday through Friday, 08:00–18:00 in the
 `America/Lima` timezone. Holidays are not modeled yet. These hours are editable
 in `config/maderaflow.json`.
 
@@ -238,7 +280,7 @@ does not create a real ticket or connect to an external ticketing system.
 
 ## Safety boundaries
 
-The API uses fixed fictional records. It does not:
+The API uses fixed demonstration records. It does not:
 
 - invent or claim to retrieve live moisture measurements;
 - guarantee an estimated completion date;
@@ -252,12 +294,13 @@ quality problem. This is a support-routing signal, not an admission of liability
 
 ## Project files
 
-- `main.py` defines the FastAPI application, fictional organization, caller and
-  lot configuration loading, validation, context filtering, multilingual
-  messages, and API endpoints.
-- `config/maderaflow.json` contains editable fictional organization, caller,
-  lot, escalation, and support-hours data. Keeping these facts outside Python
-  makes the business context configurable without changing application logic.
+- `main.py` defines the FastAPI application, demonstration organization, caller and
+  relational configuration loading, assignment validation, context filtering,
+  multilingual messages, and API endpoints.
+- `config/maderaflow.json` contains editable demonstration organization, caller,
+  wood-type, drying-status, lot, transport, escalation, and support-hours data.
+  Keeping these facts outside Python makes the context configurable without
+  changing application logic.
 - `docs/elevenlabs-integration-contract.md` documents the voice webhook tool,
   conversation flow, safety rules, and multilingual examples for reviewers.
 - `docs/reviewer-demo-checklist.md` provides repeatable end-to-end voice,
@@ -277,6 +320,8 @@ quality problem. This is a support-routing signal, not an admission of liability
   settings, and generated Python cache files from being committed.
 - `render.yaml` describes a reproducible Render web service and uses `/health`
   to decide whether a deployment is ready.
+- `LICENSE` grants use, modification, and distribution under the MIT License
+  while retaining the copyright notice and warranty disclaimer.
 
 ## Set up on Windows
 
@@ -297,9 +342,9 @@ No database or external account is required for the public read-only endpoints.
 The protected support endpoint needs a local `MADERAFLOW_TOOL_TOKEN` when tested
 outside ElevenLabs.
 
-## Change fictional business data
+## Change demonstration business data
 
-Edit `config/maderaflow.json` to change fictional caller profiles, lot facts,
+Edit `config/maderaflow.json` to change demonstration caller profiles, lot facts,
 enabled escalation triggers, or support hours. Restart the development server
 after saving the file. On startup, `main.py` checks that required sections exist,
 IDs match their configuration keys, and every caller uses a supported role and
@@ -386,17 +431,27 @@ The demonstration ElevenLabs agent follows this flow:
 ```text
 Caller speech
     -> ElevenLabs voice layer
-    -> protected webhook supplies caller ID, lot ID, and intent to FastAPI
+    -> protected webhook supplies caller ID and active language to FastAPI
+    -> FastAPI identifies the role and assigned lots
+    -> caller selects a lot only when several are assigned
+    -> FastAPI verifies the assignment and infers the intent
     -> context-aware spoken_message
     -> ElevenLabs speech response
 ```
 
-The API returns a `spoken_message` in the fictional caller's preferred language,
+The API returns a `spoken_message` in the caller's preferred language,
 and ElevenLabs speaks that message. Business rules, role filtering, and
-fictional lot context stay inside the backend. Twilio, Supabase, caller
+demonstration lot context stay inside the backend. Twilio, Supabase, caller
 authentication, real ticket creation, and real customer data remain outside
 this milestone.
 
 See `docs/elevenlabs-integration-contract.md` for the reviewer-facing tool
 schema, intent mapping, handoff behavior, and English, Spanish, and Portuguese
 conversation examples.
+
+## License
+
+This project is available under the [MIT License](LICENSE). It permits use,
+copying, modification, distribution, and commercial use as long as the
+copyright and license notice remain included. The software is provided without
+a warranty.

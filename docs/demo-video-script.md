@@ -1,109 +1,87 @@
 # MaderaFlow Demo Video Script
 
-This script produces a concise reviewer-facing demonstration of the fictional
-MaderaFlow voice agent. Aim for 90–120 seconds after trimming loading time and
-long pauses.
-
-Every person, company, lot, measurement, and operational record shown in the
-video is fictional.
+This script produces a concise reviewer-facing demonstration of the MaderaFlow
+voice agent. Aim for 90–120 seconds after trimming loading time and long pauses.
+All records shown are sample data. Do not show real customer or operational
+information.
 
 ## Before recording
 
 - Use a 16:9 screen recording at 1080p if available.
-- Open the public GitHub README and the ElevenLabs talk-to page in separate tabs.
-- Confirm the Render health endpoint is awake before recording.
+- Open the GitHub README and ElevenLabs talk-to page in separate tabs.
+- Wake the Render health endpoint before recording.
 - Publish the latest ElevenLabs prompt and webhook configuration.
-- Use headphones to prevent the agent's voice from feeding back into the
-  microphone.
-- Hide browser bookmarks, email addresses, API keys, secrets, authorization
-  headers, and dashboard configuration.
+- Use headphones to avoid audio feedback.
+- Hide bookmarks, email addresses, API keys, secrets, authorization headers,
+  and dashboard configuration.
 - Start a fresh conversation for every language.
 
-## Scene 1 — Context, 10–15 seconds
+## Scene 1 — Architecture, 10–15 seconds
 
-Show the top of the GitHub README and its architecture diagram.
-
-Narration:
+Show the README architecture and relationship diagrams.
 
 ```text
-MaderaFlow is a fictional multilingual voice-support prototype for wood drying
-and cross-border logistics. ElevenLabs handles the conversation and voice,
-while a FastAPI backend returns fictional, role-specific operational facts.
+MaderaFlow demonstrates multilingual voice support for wood drying and
+cross-border logistics. ElevenLabs handles the conversation and voice, while a
+FastAPI backend controls caller assignments, role-specific information, and
+sample operational records.
 ```
 
-## Scene 2 — Spanish supplier, 25–30 seconds
+## Scene 2 — Caller-ID-first lookup, 20–25 seconds
 
-Start a new voice conversation and say:
+Start an English conversation and say:
 
 ```text
-Soy proveedor Perú uno. Quiero revisar la documentación del lote trescientos diecisiete.
+I am US buyer one.
 ```
 
-Keep the agent's response in the recording. It should switch to Spanish,
-confirm that the lot was received, report pending supplier documentation, and
-say that the missing origin document must be submitted.
-
-Optional narration after the response:
+The agent should call the backend immediately, identify the buyer profile, list
+the assigned three-digit lot numbers, and ask which lot is needed. Reply:
 
 ```text
-The supplier receives documentation and action information, not buyer-only
+Two zero four.
+```
+
+The response should include drying status, latest recorded moisture, target
+moisture, estimated completion, and shipment readiness. Explain that the caller
+did not need to state their role or intent; the backend inferred both.
+
+## Scene 3 — Spanish provider, 20–25 seconds
+
+Start a new conversation and say:
+
+```text
+Soy proveedor Perú uno. Necesito revisar el lote trescientos diecisiete.
+```
+
+The response should switch to Spanish, confirm receipt, report pending provider
+documentation, and state the required action. It should not reveal buyer-only
 moisture or shipment details.
-```
 
-## Scene 3 — English buyer, 25–30 seconds
-
-Start a new conversation and say:
-
-```text
-I am US buyer one. What is the status of lot two hundred four?
-```
-
-The numeric phrase `US buyer 1` and the written lot ID `MF-204` are also valid
-after backend version 0.5.0 is deployed.
-
-Keep the response showing drying status, latest recorded moisture, target
-moisture, estimated completion, and shipment readiness.
-
-Optional narration:
-
-```text
-The buyer receives the operational status, but the estimated date is never
-presented as a guarantee and the measurement is described as recorded, not live.
-```
-
-## Scene 4 — Portuguese transport partner, 25–30 seconds
+## Scene 4 — Portuguese transport partner, 20–25 seconds
 
 Start a new conversation and say:
 
 ```text
-Sou logística Brasil um. O transporte do lote quatrocentos e vinte e dois pode ser agendado?
+Sou logística Brasil um. O lote quatrocentos e vinte e dois pode ser coletado?
 ```
 
-Keep the response showing collection readiness, destination, and whether
-transport can be scheduled. It must not expose buyer, procurement, pricing,
-moisture, or estimated-completion information.
+The response should include only the assigned transport movement, collection
+readiness, destination, and scheduling status. It must not expose buyer,
+procurement, pricing, moisture, or estimated-completion information.
 
-## Scene 5 — Close, 10–15 seconds
+## Scene 5 — Data model and close, 15–20 seconds
 
-Return to the README architecture diagram or automated-test badge.
-
-Narration:
+Return to the relationship diagram.
 
 ```text
-The prototype demonstrates that a natural voice becomes useful when it is
-combined with business context, multilingual retrieval, privacy boundaries,
-safe escalation, and a reliable backend tool. All demonstration data is
-fictional, and real transfers, tickets, authentication, and customer data are
-outside this milestone.
+Wood lot is the central record. Each lot references its buyer, provider, wood
+type, and drying status. Transport is separate so one lot can have several
+movements, such as inbound delivery and outbound shipment. The result is a
+contextual assistant grounded in business relationships rather than a generic
+voice receptionist.
 ```
 
-## What to include with the video
-
-When sharing it, include:
-
-- the GitHub repository link;
-- the ElevenLabs talk-to link;
-- the live FastAPI documentation link;
-- a clear statement that all demonstration data is fictional; and
-- an invitation for feedback about multilingual voice workflows and human
-  handoff design.
+When sharing the video, include the GitHub repository, ElevenLabs agent, and
+live API documentation links, plus a note that the demonstration uses sample
+data and is not connected to live customers.

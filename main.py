@@ -1,4 +1,4 @@
-"""Configurable fictional API for MaderaFlow wood-drying voice support."""
+"""Configurable API for the MaderaFlow wood-drying voice-support demo."""
 
 import json
 import logging
@@ -28,14 +28,17 @@ REQUIRED_CONFIG_SECTIONS = {
     "organization",
     "voice_agent",
     "callers",
+    "wood_types",
+    "drying_statuses",
     "lots",
+    "transports",
     "escalation_triggers",
     "support_hours",
 }
 
 
 def _load_configuration() -> dict[str, Any]:
-    """Load and validate fictional business data when the application starts."""
+    """Load and validate demonstration business data at application startup."""
     try:
         with CONFIG_PATH.open(encoding="utf-8") as config_file:
             configuration = json.load(config_file)
@@ -63,9 +66,53 @@ def _load_configuration() -> dict[str, Any]:
         if language not in SUPPORTED_LANGUAGE_CODES:
             raise RuntimeError(f"Caller {config_key} has an unsupported language")
 
+    caller_ids = {
+        caller["caller_id"]: caller for caller in configuration["callers"].values()
+    }
+    wood_types_by_id = {
+        wood_type["wood_type_id"]: wood_type
+        for wood_type in configuration["wood_types"].values()
+    }
+    drying_statuses_by_id = {
+        drying_status["drying_status_id"]: drying_status
+        for drying_status in configuration["drying_statuses"].values()
+    }
+
+    lot_ids: set[str] = set()
     for config_key, lot in configuration["lots"].items():
         if config_key != lot.get("lot_id", "").lower():
             raise RuntimeError(f"Lot configuration key does not match {config_key}")
+        lot_ids.add(lot["lot_id"])
+        buyer = caller_ids.get(lot.get("buyer_id"))
+        provider = caller_ids.get(lot.get("provider_id"))
+        if buyer is None or buyer["caller_type"] != "buyer":
+            raise RuntimeError(f"Lot {config_key} references an invalid buyer")
+        if provider is None or provider["caller_type"] != "supplier":
+            raise RuntimeError(f"Lot {config_key} references an invalid provider")
+        wood_type = wood_types_by_id.get(lot.get("wood_type_id"))
+        if wood_type is None:
+            raise RuntimeError(f"Lot {config_key} references an invalid wood type")
+        drying_status = drying_statuses_by_id.get(lot.get("drying_status_id"))
+        if drying_status is None:
+            raise RuntimeError(f"Lot {config_key} references an invalid drying status")
+
+        # These readable values are derived from their referenced records. The
+        # IDs remain the source of truth in the configuration file.
+        lot["species"] = wood_type["name"]
+        lot["drying_status"] = drying_status["code"]
+
+    for config_key, transport in configuration["transports"].items():
+        if config_key != transport.get("transport_id", "").lower():
+            raise RuntimeError(
+                f"Transport configuration key does not match {config_key}"
+            )
+        if transport.get("lot_id") not in lot_ids:
+            raise RuntimeError(f"Transport {config_key} references an invalid lot")
+        transporter = caller_ids.get(transport.get("transporter_id"))
+        if transporter is None or transporter["caller_type"] != "transport_partner":
+            raise RuntimeError(
+                f"Transport {config_key} references an invalid transporter"
+            )
 
     return configuration
 
@@ -74,7 +121,10 @@ CONFIG = _load_configuration()
 ORGANIZATION = CONFIG["organization"]
 VOICE_AGENT = CONFIG["voice_agent"]
 CALLERS = CONFIG["callers"]
+WOOD_TYPES = CONFIG["wood_types"]
+DRYING_STATUSES = CONFIG["drying_statuses"]
 LOTS = CONFIG["lots"]
+TRANSPORTS = CONFIG["transports"]
 ESCALATION_TRIGGERS = CONFIG["escalation_triggers"]
 SUPPORT_HOURS = CONFIG["support_hours"]
 
@@ -84,7 +134,7 @@ def _voice_identifier_key(value: str) -> str:
 
     Speech-to-text tools commonly remove hyphens, insert spaces, or omit accent
     marks. This key removes those presentation differences without changing the
-    canonical identifier stored in the fictional data.
+    canonical identifier stored in the demonstration data.
     """
     decomposed = unicodedata.normalize("NFKD", value.casefold())
     return "".join(
@@ -99,7 +149,7 @@ def _build_voice_aliases(
     configured_records: dict[str, dict[str, Any]],
     id_field: str,
 ) -> dict[str, str]:
-    """Build a collision-checked alias index for configured fictional IDs."""
+    """Build a collision-checked alias index for configured demonstration IDs."""
     alias_index: dict[str, str] = {}
     for canonical_key, aliases in alias_groups.items():
         if canonical_key not in configured_records:
@@ -217,11 +267,11 @@ LOT_VOICE_ALIASES = _build_voice_aliases(
 
 
 class SupportRequest(BaseModel):
-    """Structured context expected from a future voice layer."""
+    """Context supplied by the voice layer, beginning with a caller ID."""
 
     caller_id: str
-    lot_id: str
-    intent: str
+    lot_id: str | None = None
+    intent: str | None = None
     language: Literal["en", "es", "pt"] | None = None
 
 
@@ -258,9 +308,9 @@ LABELS = {
 }
 
 OPENING_MESSAGES = {
-    "en": "Hello, you have reached MaderaFlow Support, an automated voice assistant. How can I help with your fictional wood lot today?",
-    "es": "Hola, ha contactado con MaderaFlow Support, un asistente de voz automatizado. ¿Cómo puedo ayudarle hoy con su lote de madera ficticio?",
-    "pt": "Olá, você entrou em contato com a MaderaFlow Support, uma assistente de voz automatizada. Como posso ajudar hoje com seu lote de madeira fictício?",
+    "en": "Hello, you have reached MaderaFlow Support, an automated voice assistant. Please tell me your caller ID so I can find your assigned wood lots.",
+    "es": "Hola, ha contactado con MaderaFlow Support, un asistente de voz automatizado. Indíqueme su ID de llamada para encontrar sus lotes de madera asignados.",
+    "pt": "Olá, você entrou em contato com a MaderaFlow Support, uma assistente de voz automatizada. Informe seu ID de chamada para eu localizar seus lotes de madeira atribuídos.",
 }
 
 SUPPORTED_INTENTS = {
@@ -270,7 +320,7 @@ SUPPORTED_INTENTS = {
 }
 
 SAFETY_BOUNDARIES = [
-    "Use only fixed fictional lot records returned by the API.",
+    "Use only fixed demonstration records returned by the API.",
     "Never invent or describe a measurement as live.",
     "Never guarantee an estimated completion date.",
     "Do not give legal or customs advice.",
@@ -287,10 +337,10 @@ def _label(value: str, language: str) -> str:
 app = FastAPI(
     title="MaderaFlow Voice Support API",
     description=(
-        "A fictional multilingual API for wood-drying status and cross-border "
-        "logistics coordination. Every organization, caller, and lot is fictional."
+        "A multilingual demonstration API for wood-drying status and cross-border "
+        "logistics coordination. It contains sample records and no real customer data."
     ),
-    version="0.5.0",
+    version="0.6.0",
 )
 
 
@@ -319,7 +369,7 @@ def _find_caller(caller_id: str) -> dict[str, Any]:
     if caller is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Unknown fictional caller '{caller_id}'.",
+            detail=f"Unknown caller '{caller_id}'.",
         )
     return caller
 
@@ -330,9 +380,99 @@ def _find_lot(lot_id: str) -> dict[str, Any]:
     if lot is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Unknown fictional lot '{lot_id}'.",
+            detail=f"Unknown lot '{lot_id}'.",
         )
     return lot
+
+
+def _transports_for_lot(
+    lot_id: str,
+    transporter_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return ordered transport movements for one lot and optional transporter."""
+    movements = [
+        transport
+        for transport in TRANSPORTS.values()
+        if transport["lot_id"] == lot_id
+        and (
+            transporter_id is None
+            or transport["transporter_id"] == transporter_id
+        )
+    ]
+    return sorted(movements, key=lambda movement: movement["sequence"])
+
+
+def _lots_for_caller(caller: dict[str, Any]) -> list[dict[str, Any]]:
+    """Resolve the wood lots assigned to a buyer, provider, or transporter."""
+    caller_id = caller["caller_id"]
+    caller_type = caller["caller_type"]
+
+    if caller_type == "buyer":
+        assigned_lot_ids = {
+            lot["lot_id"] for lot in LOTS.values() if lot["buyer_id"] == caller_id
+        }
+    elif caller_type == "supplier":
+        assigned_lot_ids = {
+            lot["lot_id"] for lot in LOTS.values() if lot["provider_id"] == caller_id
+        }
+    else:
+        assigned_lot_ids = {
+            transport["lot_id"]
+            for transport in TRANSPORTS.values()
+            if transport["transporter_id"] == caller_id
+        }
+
+    return sorted(
+        (lot for lot in LOTS.values() if lot["lot_id"] in assigned_lot_ids),
+        key=lambda lot: lot["lot_id"],
+    )
+
+
+def _require_lot_assignment(
+    caller: dict[str, Any],
+    lot: dict[str, Any],
+) -> None:
+    """Prevent a caller from retrieving a lot outside their assignments."""
+    assigned_ids = {assigned_lot["lot_id"] for assigned_lot in _lots_for_caller(caller)}
+    if lot["lot_id"] not in assigned_ids:
+        raise HTTPException(
+            status_code=404,
+            detail="The requested lot is not assigned to this caller.",
+        )
+
+
+def _lot_selection_response(
+    caller: dict[str, Any],
+    language: str,
+) -> dict[str, Any]:
+    """Ask the caller to select a lot when their ID maps to several lots."""
+    available_lots = [lot["lot_id"] for lot in _lots_for_caller(caller)]
+    spoken_numbers = ", ".join(lot_id.removeprefix("MF-") for lot_id in available_lots)
+    messages = {
+        "en": (
+            f"I found {len(available_lots)} wood lots assigned to your profile: "
+            f"{spoken_numbers}. Which three-digit lot number do you need?"
+        ),
+        "es": (
+            f"Encontré {len(available_lots)} lotes de madera asignados a su perfil: "
+            f"{spoken_numbers}. ¿Qué número de lote de tres dígitos necesita?"
+        ),
+        "pt": (
+            f"Encontrei {len(available_lots)} lotes de madeira atribuídos ao seu perfil: "
+            f"{spoken_numbers}. Qual número de lote de três dígitos você precisa?"
+        ),
+    }
+    return {
+        "demonstration_data": True,
+        "caller_id": caller["caller_id"],
+        "caller_type": caller["caller_type"],
+        "language": language,
+        "resolved": False,
+        "reason": "lot_selection_required",
+        "next_action": "ask_for_lot",
+        "available_lots": available_lots,
+        "spoken_message": messages[language],
+    }
 
 
 def _buyer_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
@@ -416,7 +556,16 @@ def _supplier_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
     }
 
 
-def _transport_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
+def _transport_response(
+    lot: dict[str, Any],
+    language: str,
+    caller: dict[str, Any],
+) -> dict[str, Any]:
+    movements = _transports_for_lot(lot["lot_id"], caller["caller_id"])
+    current_movement = next(
+        (movement for movement in movements if movement["status"] != "completed"),
+        movements[-1],
+    )
     collection_ready = lot["transport_readiness"] == "ready"
     collection_status = _label(lot["transport_readiness"], language)
     schedule_text = {
@@ -439,27 +588,43 @@ def _transport_response(lot: dict[str, Any], language: str) -> dict[str, Any]:
     messages = {
         "en": (
             f"Lot {lot['lot_id']} collection readiness is "
-            f"{collection_status}. Destination: {lot['destination']}. "
+            f"{collection_status}. Destination: {current_movement['destination']}. "
             f"{schedule_text['en']}"
         ),
         "es": (
             f"La preparación para recoger el lote {lot['lot_id']} es "
-            f"{collection_status}. Destino: {lot['destination']}. "
+            f"{collection_status}. Destino: {current_movement['destination']}. "
             f"{schedule_text['es']}"
         ),
         "pt": (
             f"A situação de coleta do lote {lot['lot_id']} é "
-            f"{collection_status}. Destino: {lot['destination']}. "
+            f"{collection_status}. Destino: {current_movement['destination']}. "
             f"{schedule_text['pt']}"
         ),
     }
     return {
         "collection_ready": collection_ready,
         "collection_status": lot["transport_readiness"],
-        "destination": lot["destination"],
+        "transport_id": current_movement["transport_id"],
+        "movement_sequence": current_movement["sequence"],
+        "origin": current_movement["origin"],
+        "destination": current_movement["destination"],
         "transport_can_be_scheduled": collection_ready,
         "spoken_message": messages[language],
     }
+
+
+def _role_response(
+    caller: dict[str, Any],
+    lot: dict[str, Any],
+    language: str,
+) -> dict[str, Any]:
+    """Build the allow-listed lot view for the caller's assigned role."""
+    if caller["caller_type"] == "buyer":
+        return _buyer_response(lot, language)
+    if caller["caller_type"] == "supplier":
+        return _supplier_response(lot, language)
+    return _transport_response(lot, language, caller)
 
 
 def _buyer_escalation_recommended(lot: dict[str, Any]) -> bool:
@@ -485,7 +650,7 @@ def _now_in_lima() -> datetime:
 
 
 def _support_is_open(now: datetime | None = None) -> bool:
-    """Check fictional weekday support hours; holidays are not modeled yet."""
+    """Check demonstration weekday support hours; holidays are not modeled yet."""
     current = now or _now_in_lima()
     opens_at = time.fromisoformat(SUPPORT_HOURS["opens_at"])
     closes_at = time.fromisoformat(SUPPORT_HOURS["closes_at"])
@@ -548,49 +713,58 @@ def _require_tool_token(authorization: str | None = Header(default=None)) -> Non
 
 def _support_request_response(request: SupportRequest) -> dict[str, Any]:
     caller = _find_caller(request.caller_id)
-    lot = _find_lot(request.lot_id)
     language = request.language or caller["preferred_language"]["code"]
     allowed_intent_by_role = {role: intent for intent, role in SUPPORTED_INTENTS.items()}
     supported_intents = set(SUPPORTED_INTENTS)
+    assigned_lots = _lots_for_caller(caller)
+    provided_lot_id = request.lot_id.strip() if request.lot_id else None
+    provided_intent = request.intent.strip() if request.intent else None
 
-    if request.intent not in supported_intents:
+    if provided_lot_id is None:
+        if len(assigned_lots) != 1:
+            return _lot_selection_response(caller, language)
+        lot = assigned_lots[0]
+    else:
+        lot = _find_lot(provided_lot_id)
+        _require_lot_assignment(caller, lot)
+
+    inferred_intent = allowed_intent_by_role[caller["caller_type"]]
+    intent = provided_intent or inferred_intent
+
+    if intent not in supported_intents:
         fallback = _fallback_response(language, "unsupported_intent")
         return {
-            "fictional": True,
+            "demonstration_data": True,
             "caller_id": caller["caller_id"],
             "lot_id": lot["lot_id"],
-            "intent": request.intent,
+            "intent": intent,
             "language": language,
             **fallback,
         }
 
-    if request.intent != allowed_intent_by_role[caller["caller_type"]]:
+    if intent != inferred_intent:
         fallback = _fallback_response(language, "intent_not_available_for_caller_role")
         return {
-            "fictional": True,
+            "demonstration_data": True,
             "caller_id": caller["caller_id"],
             "lot_id": lot["lot_id"],
-            "intent": request.intent,
+            "intent": intent,
             "language": language,
             **fallback,
         }
 
-    role_builders = {
-        "buyer": _buyer_response,
-        "supplier": _supplier_response,
-        "transport_partner": _transport_response,
-    }
-    role_view = role_builders[caller["caller_type"]](lot, language)
+    role_view = _role_response(caller, lot, language)
     escalation = (
         caller["caller_type"] == "buyer"
         and caller["support_priority"] == "high"
         and _buyer_escalation_recommended(lot)
     )
     return {
-        "fictional": True,
+        "demonstration_data": True,
         "caller_id": caller["caller_id"],
         "lot_id": lot["lot_id"],
-        "intent": request.intent,
+        "intent": intent,
+        "intent_inferred": provided_intent is None,
         "language": language,
         "resolved": True,
         "escalation_recommended": escalation,
@@ -603,13 +777,13 @@ def _support_request_response(request: SupportRequest) -> dict[str, Any]:
 
 @app.get("/health")
 def get_health() -> dict[str, str]:
-    """Confirm that the fictional MaderaFlow backend can answer requests."""
+    """Confirm that the MaderaFlow demonstration backend can answer requests."""
     return {"status": "ok"}
 
 
 @app.get("/organization")
 def get_organization() -> dict[str, Any]:
-    """Return public information about the fictional organization."""
+    """Return public information about the demonstration organization."""
     return ORGANIZATION
 
 
@@ -626,7 +800,7 @@ def get_voice_agent_config() -> dict[str, Any]:
             "name": ORGANIZATION["name"],
             "industry": ORGANIZATION["industry"],
             "headquarters": ORGANIZATION["headquarters"],
-            "fictional": ORGANIZATION["fictional"],
+            "demonstration_data": ORGANIZATION["demonstration_data"],
         },
         "supported_languages": ORGANIZATION["supported_languages"],
         "supported_intents": [
@@ -642,9 +816,14 @@ def get_voice_agent_config() -> dict[str, Any]:
                 "header": "Authorization",
                 "secret_required": True,
             },
-            "required_fields": ["caller_id", "lot_id", "intent"],
-            "optional_fields": ["language"],
+            "required_fields": ["caller_id"],
+            "optional_fields": ["lot_id", "intent", "language"],
             "language_values": sorted(SUPPORTED_LANGUAGE_CODES),
+            "caller_lookup_flow": (
+                "Send caller_id first. The API identifies the role and assigned lots. "
+                "Send lot_id only after selection when several lots are available. "
+                "Intent is inferred from the caller role when omitted."
+            ),
         },
         "support_hours": {
             "timezone": SUPPORT_HOURS["timezone"],
@@ -659,14 +838,41 @@ def get_voice_agent_config() -> dict[str, Any]:
             "creates_real_ticket": False,
         },
         "safety_boundaries": SAFETY_BOUNDARIES,
-        "data_notice": "Every organization, caller, and lot in this API is fictional.",
+        "relationship_model": {
+            "central_entity": "wood_lot",
+            "lot_references": [
+                "buyer_id",
+                "provider_id",
+                "wood_type_id",
+                "drying_status_id",
+            ],
+            "transport_relationship": "wood_lot 1:N transport N:1 transporter",
+        },
+        "data_notice": (
+            "All organizations, callers, lots, measurements, and operational "
+            "records are demonstration data. Do not submit real customer data."
+        ),
     }
 
 
 @app.get("/callers/{caller_id}")
 def get_caller(caller_id: str) -> dict[str, Any]:
-    """Return one fictional caller profile."""
+    """Return one demonstration caller profile."""
     return _find_caller(caller_id)
+
+
+@app.get("/callers/{caller_id}/lots")
+def get_caller_lots(caller_id: str) -> dict[str, Any]:
+    """Return the lot IDs assigned to one caller without exposing lot details."""
+    caller = _find_caller(caller_id)
+    lot_ids = [lot["lot_id"] for lot in _lots_for_caller(caller)]
+    return {
+        "demonstration_data": True,
+        "caller_id": caller["caller_id"],
+        "caller_type": caller["caller_type"],
+        "assigned_lot_count": len(lot_ids),
+        "assigned_lot_ids": lot_ids,
+    }
 
 
 @app.get("/lots/{lot_id}")
@@ -675,24 +881,20 @@ def get_lot(
     caller_id: str,
     language: Literal["en", "es", "pt"] | None = None,
 ) -> dict[str, Any]:
-    """Return a fictional lot view tailored to the caller's role and language."""
+    """Return an assigned lot view tailored to the caller's role and language."""
     caller = _find_caller(caller_id)
     lot = _find_lot(lot_id)
+    _require_lot_assignment(caller, lot)
     response_language = language or caller["preferred_language"]["code"]
 
-    response_builders = {
-        "buyer": _buyer_response,
-        "supplier": _supplier_response,
-        "transport_partner": _transport_response,
-    }
-    role_view = response_builders[caller["caller_type"]](lot, response_language)
+    role_view = _role_response(caller, lot, response_language)
 
     escalation_recommended = False
     if caller["caller_type"] == "buyer" and caller["support_priority"] == "high":
         escalation_recommended = _buyer_escalation_recommended(lot)
 
     return {
-        "fictional": True,
+        "demonstration_data": True,
         "lot_id": lot["lot_id"],
         "caller_id": caller["caller_id"],
         "caller_type": caller["caller_type"],
@@ -707,5 +909,5 @@ def create_support_response(
     request: SupportRequest,
     _authorized: None = Depends(_require_tool_token),
 ) -> dict[str, Any]:
-    """Resolve one voice-ready fictional request or recommend safe follow-up."""
+    """Resolve one voice-ready demonstration request or recommend follow-up."""
     return _support_request_response(request)
