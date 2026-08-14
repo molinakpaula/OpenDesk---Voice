@@ -1,20 +1,78 @@
 # MaderaFlow Voice Support API
 
-MaderaFlow is a fictional wood-drying and cross-border logistics coordination
-company headquartered in Puerto Maldonado, Peru. In this fictional scenario, it
-serves wood suppliers, manufacturers, and logistics partners in Peru, Brazil,
-and the United States.
+[![Backend tests](https://github.com/molinakpaula/OpenDesk---Voice/actions/workflows/tests.yml/badge.svg)](https://github.com/molinakpaula/OpenDesk---Voice/actions/workflows/tests.yml)
+[![Live API](https://img.shields.io/badge/API-live%20on%20Render-46E3B7)](https://maderaflow-voice-support.onrender.com/health)
+[![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-3776AB)](https://www.python.org/)
 
-This repository contains a small multilingual FastAPI backend for looking up
-fictional wood-lot status. Every organization, caller, and lot in the project is
-fictional. The project contains no real customer, employee, shipment, or sensor
-data.
+A contextual multilingual voice-agent prototype for fictional wood drying and
+cross-border logistics support in English, Spanish, and Portuguese.
 
-Live demonstration: <https://maderaflow-voice-support.onrender.com>
+> **Fictional demonstration:** MaderaFlow, every caller profile, every lot,
+> every measurement, and every operational record in this repository are
+> fictional. No real customer, employee, shipment, supplier, or sensor data is
+> used.
 
-- Health: <https://maderaflow-voice-support.onrender.com/health>
-- Public voice contract: <https://maderaflow-voice-support.onrender.com/voice-agent-config>
-- Interactive API documentation: <https://maderaflow-voice-support.onrender.com/docs>
+**[Try the voice agent](https://elevenlabs.io/app/talk-to?agent_id=agent_2401kzxk9b7mf3jr3hw5dgcgsjtr&branch_id=agtbrch_3301kzxk9d3jf708fct42bcd8sfx)** ·
+**[Explore the live API](https://maderaflow-voice-support.onrender.com/docs)** ·
+**[Open the reviewer checklist](docs/reviewer-demo-checklist.md)**
+
+MaderaFlow represents a fictional company headquartered in Puerto Maldonado,
+Peru. It coordinates wood drying and cross-border logistics for suppliers,
+manufacturers, buyers, and transport partners across Peru, Brazil, and the
+United States.
+
+## What this prototype demonstrates
+
+| Capability | Current behavior |
+| --- | --- |
+| Multilingual voice | One ElevenLabs agent supports English, Spanish, and Portuguese. |
+| Contextual answers | Buyer, supplier, and transport-partner responses expose different information. |
+| Grounded operations | FastAPI returns fixed fictional lot facts and voice-ready messages. |
+| Speech-friendly IDs | Approved natural aliases are normalized to stable internal identifiers. |
+| Guardrails | The agent avoids live-data claims, guarantees, legal advice, liability, and role-inappropriate information. |
+| Safe follow-up | Unresolved requests recommend a human during working hours or a ticket after hours; no transfer or ticket is falsely claimed. |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Caller[Caller<br/>English · Spanish · Portuguese]
+    Voice[ElevenLabs<br/>voice and conversation layer]
+    Tool[Protected webhook<br/>POST /support-requests]
+    API[MaderaFlow FastAPI<br/>business rules and translations]
+    Context{Caller role}
+    Buyer[Buyer view]
+    Supplier[Supplier view]
+    Transport[Transport view]
+
+    Caller -->|speech| Voice
+    Voice -->|caller ID · lot ID · intent| Tool
+    Tool --> API
+    API --> Context
+    Context --> Buyer
+    Context --> Supplier
+    Context --> Transport
+    API -->|localized spoken_message| Voice
+    Voice -->|speech| Caller
+```
+
+ElevenLabs handles listening, language switching, conversation flow, and
+speech. FastAPI remains the source of truth for fictional operational facts,
+role filtering, escalation signals, and translated support messages.
+
+## One-minute voice demo
+
+Start a new conversation for each example so language state does not carry
+between tests:
+
+- English buyer: “I am buyer one. What is the status of lot two hundred four?”
+- Spanish supplier: “Soy proveedor Perú uno. Quiero revisar la documentación
+  del lote trescientos diecisiete.”
+- Portuguese transport partner: “Sou logística Brasil um. O transporte do lote
+  quatrocentos e vinte e dois pode ser agendado?”
+
+The complete expected results and safety tests are in the
+[reviewer demo checklist](docs/reviewer-demo-checklist.md).
 
 ## Why caller context matters
 
@@ -78,12 +136,12 @@ information. A `GET` request retrieves information without changing it.
 - `GET /health` confirms that the backend can respond.
 - `GET /organization` returns the fictional organization and languages.
 - `GET /voice-agent-config` returns a public, non-sensitive contract for a
-  future voice layer.
+  voice layer.
 - `GET /callers/{caller_id}` returns one fictional caller profile.
 - `GET /lots/{lot_id}?caller_id={caller_id}` returns a role- and
   language-specific lot response.
-- `POST /support-requests` accepts structured context from a future voice layer
-  and handles lot status, documentation, and transport-readiness intents.
+- `POST /support-requests` accepts structured context from the ElevenLabs voice
+  layer and handles lot status, documentation, and transport-readiness intents.
 - `GET /docs` opens FastAPI's interactive API documentation.
 
 Unknown caller and lot IDs return `404 Not Found`, meaning the requested
@@ -117,8 +175,8 @@ different role and preferred language.
 
 ## Voice-ready support requests
 
-The future voice layer can send one JSON request after identifying the caller,
-lot, and intent:
+The voice layer sends one JSON request after identifying the caller, lot, and
+intent:
 
 ```json
 {
@@ -187,13 +245,17 @@ quality problem. This is a support-routing signal, not an admission of liability
 - `config/maderaflow.json` contains editable fictional organization, caller,
   lot, escalation, and support-hours data. Keeping these facts outside Python
   makes the business context configurable without changing application logic.
-- `docs/elevenlabs-integration-contract.md` documents the future voice tool,
+- `docs/elevenlabs-integration-contract.md` documents the voice webhook tool,
   conversation flow, safety rules, and multilingual examples for reviewers.
+- `docs/reviewer-demo-checklist.md` provides repeatable end-to-end voice,
+  privacy, safety, and handoff checks for demonstrations and reviews.
 - `docs/elevenlabs-agent-configuration.md` contains the reviewed system prompt,
   multilingual greetings, voice settings, and conversation tests.
 - `tests/test_main.py` sends automated requests through the application and
   checks successful responses, errors, language selection, role-specific
   content, escalation, and confidentiality boundaries.
+- `.github/workflows/tests.yml` repeats the full suite on Python 3.11, 3.12,
+  and 3.13 for every push to `main` and every pull request.
 - `requirements.txt` pins FastAPI, Uvicorn, and timezone data needed to reproduce
   Lima working-hours checks consistently across platforms.
 - `.gitignore` prevents virtual environments, environment secrets, editor
@@ -216,7 +278,9 @@ Install the pinned requirements if needed:
 python -m pip install -r requirements.txt
 ```
 
-No database, API key, or external account is required.
+No database or external account is required for the public read-only endpoints.
+The protected support endpoint needs a local `MADERAFLOW_TOOL_TOKEN` when tested
+outside ElevenLabs.
 
 ## Change fictional business data
 
@@ -300,24 +364,23 @@ python -m unittest discover -s tests -v
 The tests use Python's built-in testing tools, so no extra test package is
 required.
 
-## Future ElevenLabs integration
+## ElevenLabs integration
 
-ElevenLabs is intentionally not connected in this milestone. A future voice
-layer could follow this flow:
+The demonstration ElevenLabs agent follows this flow:
 
 ```text
 Caller speech
     -> ElevenLabs voice layer
-    -> caller and lot IDs supplied to MaderaFlow FastAPI
+    -> protected webhook supplies caller ID, lot ID, and intent to FastAPI
     -> context-aware spoken_message
     -> ElevenLabs speech response
 ```
 
-The API already returns a `spoken_message` in the fictional caller's preferred
-language. A future integration can speak that message while keeping business
-rules, role filtering, and fictional lot context inside this backend. Twilio,
-Supabase, authentication, and real customer data are also outside this
-milestone.
+The API returns a `spoken_message` in the fictional caller's preferred language,
+and ElevenLabs speaks that message. Business rules, role filtering, and
+fictional lot context stay inside the backend. Twilio, Supabase, caller
+authentication, real ticket creation, and real customer data remain outside
+this milestone.
 
 See `docs/elevenlabs-integration-contract.md` for the reviewer-facing tool
 schema, intent mapping, handoff behavior, and English, Spanish, and Portuguese

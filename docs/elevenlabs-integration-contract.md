@@ -1,8 +1,9 @@
-# ElevenLabs Integration Contract (Future Milestone)
+# ElevenLabs Integration Contract
 
-This document describes how a future ElevenLabs voice layer can interact with
-the fictional MaderaFlow API. It is a design contract only. This repository does
-not contain an ElevenLabs SDK, API key, agent ID, webhook, or live connection.
+This document describes how the demonstration ElevenLabs agent interacts with
+the fictional MaderaFlow API. ElevenLabs is configured to call the protected
+webhook directly, so this repository does not need an ElevenLabs SDK. API keys,
+bearer-token values, and other secrets are never stored in the repository.
 
 Every organization, caller, and wood lot described here is fictional.
 
