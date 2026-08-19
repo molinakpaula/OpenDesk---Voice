@@ -4,6 +4,7 @@ import logging
 import secrets
 from time import perf_counter
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -13,13 +14,31 @@ from maderaflow.config import (
     LOG_LEVEL,
     MADERAFLOW_TOOL_TOKEN,
     ORGANIZATION,
+    ORDER_DATABASE_PATH,
+    ORDER_INTAKE_CONFIG,
+    ORDER_INTAKE_ENABLED,
     PUBLIC_BASE_URL,
     SUPPORTED_LANGUAGE_CODES,
     SUPPORT_HOURS,
     VOICE_AGENT,
 )
-from maderaflow.models import LanguageCode, SupportRequest
+from maderaflow.models import (
+    ElevenLabsPreCallRequest,
+    LanguageCode,
+    OrderIntakeRequest,
+    SupportRequest,
+)
 from maderaflow.errors import MaderaFlowNotFoundError
+from maderaflow.order_intake import (
+    build_whatsapp_message,
+    creation_spoken_message,
+    generate_spanish_summary,
+    intake_preview,
+    pre_call_response,
+    utc_now,
+    whatsapp_delivery_state,
+)
+from maderaflow.order_storage import SQLiteOrderRepository
 from maderaflow.repositories import (
     find_caller,
     find_lot,
@@ -38,14 +57,15 @@ from maderaflow.support import (
 
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
 REQUEST_LOGGER = logging.getLogger("maderaflow.requests")
+ORDER_REPOSITORY = SQLiteOrderRepository(ORDER_DATABASE_PATH)
 
 app = FastAPI(
-    title="MaderaFlow Voice Support API",
+    title="Wood Operations Voice API",
     description=(
-        "A multilingual demonstration API for wood-drying status and cross-border "
-        "logistics coordination. It contains sample records and no real customer data."
+        "A multilingual API containing the MaderaFlow lot-status demonstration and "
+        "an isolated, disabled-by-default Maderera Las Garzas order-intake milestone."
     ),
-    version="0.7.0",
+    version="0.8.0",
 )
 
 
@@ -99,6 +119,18 @@ def require_tool_token(authorization: str | None = Header(default=None)) -> None
         )
 
 
+def require_order_intake_enabled() -> None:
+    """Fail closed in production until durable storage has been configured."""
+    if not ORDER_INTAKE_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Order intake is disabled. Configure durable storage and set "
+                "ORDER_INTAKE_ENABLED=true before accepting customer data."
+            ),
+        )
+
+
 @app.get("/health")
 def get_health() -> dict[str, str]:
     """Confirm that the backend can answer requests."""
@@ -109,6 +141,39 @@ def get_health() -> dict[str, str]:
 def get_organization() -> dict[str, Any]:
     """Return public information about the demonstration organization."""
     return ORGANIZATION
+
+
+@app.get("/order-intake-config")
+def get_order_intake_config() -> dict[str, Any]:
+    """Return public order-intake facts without phone numbers or secrets."""
+    return {
+        "organization": ORDER_INTAKE_CONFIG["organization"],
+        "supported_languages": ORDER_INTAKE_CONFIG["supported_languages"],
+        "working_hours": ORDER_INTAKE_CONFIG["working_hours"],
+        "country_routing": {
+            "called_number_first": True,
+            "caller_prefix_fallback": {"+51": "PE", "+49": "DE"},
+            "unknown_country_action": "ask_caller_country",
+        },
+        "privacy": {
+            "transcription_consent_required": True,
+            "declined_consent_action": "callback_without_transcript",
+            "personal_contact_values_exposed": False,
+        },
+        "human_confirmation_required_for": [
+            "price",
+            "availability",
+            "timing",
+            "transport",
+            "documentation",
+            "export_conditions",
+        ],
+        "tool": {
+            "preview_url": f"{PUBLIC_BASE_URL}/order-intake/preview",
+            "create_url": f"{PUBLIC_BASE_URL}/order-requests",
+            "authentication": "bearer",
+        },
+    }
 
 
 @app.get("/voice-agent-config")
@@ -234,3 +299,102 @@ def create_support_response(
 ) -> dict[str, Any]:
     """Resolve a voice-ready request or recommend safe follow-up."""
     return support_request_response(request)
+
+
+@app.post("/order-intake/preview")
+def preview_order_intake(
+    request: OrderIntakeRequest,
+    _authorized: None = Depends(require_tool_token),
+) -> dict[str, Any]:
+    """Return the next required question without storing customer data."""
+    return intake_preview(request)
+
+
+@app.post("/elevenlabs/pre-call")
+def configure_inbound_call(
+    request: ElevenLabsPreCallRequest,
+    _authorized: None = Depends(require_tool_token),
+) -> dict[str, Any]:
+    """Choose the opening language before an inbound phone call connects."""
+    return pre_call_response(
+        caller_number=request.caller_id,
+        called_number=request.called_number,
+        call_sid=request.call_sid,
+    )
+
+
+@app.post("/order-requests")
+def create_order_request(
+    request: OrderIntakeRequest,
+    _authorized: None = Depends(require_tool_token),
+    _enabled: None = Depends(require_order_intake_enabled),
+) -> dict[str, Any]:
+    """Validate and save one confirmed request without faking notification."""
+    preview = intake_preview(request)
+    if preview["contact_declined"]:
+        return {
+            **preview,
+            "saved": False,
+            "processed": False,
+            "next_action": "end_without_storing_customer_request",
+            "spoken_message": {
+                "es": "Entendido. No registraré una solicitud de contacto. Gracias por llamar.",
+                "de": "Verstanden. Ich speichere keine Kontaktanfrage. Vielen Dank für Ihren Anruf.",
+                "en": "Understood. I will not store a contact request. Thank you for calling.",
+            }[preview["language"]],
+        }
+    if not preview["ready_to_create"]:
+        return {
+            **preview,
+            "saved": False,
+            "processed": False,
+            "next_action": "ask_next_question",
+            "spoken_message": preview["next_question"],
+        }
+
+    country_for_id = preview["country"] if preview["country"] in {"PE", "DE"} else "OT"
+    language = preview["language"]
+    now_utc = utc_now()
+    lima_timezone = ZoneInfo(ORDER_INTAKE_CONFIG["working_hours"]["timezone"])
+    local_date = now_utc.astimezone(lima_timezone).date().isoformat()
+    status = (
+        ORDER_INTAKE_CONFIG["order_rules"]["callback_status"]
+        if request.transcription_consent is False
+        else ORDER_INTAKE_CONFIG["order_rules"]["initial_status"]
+    )
+    summary = generate_spanish_summary(request, preview["country"])
+    delivery_status, alert_visible = whatsapp_delivery_state()
+    stored = ORDER_REPOSITORY.create(
+        request,
+        country_code=country_for_id,
+        language_code=language,
+        status=status,
+        spanish_summary=summary,
+        escalation_reasons=preview["escalation_reasons"],
+        whatsapp_message_factory=lambda request_id: build_whatsapp_message(
+            request_id,
+            request,
+            preview["country"],
+            summary,
+            preview["escalation_reasons"],
+        ),
+        whatsapp_delivery_status=delivery_status,
+        alert_visible=alert_visible,
+        now_utc=now_utc,
+        local_date=local_date,
+    )
+    return {
+        "saved": True,
+        "processed": stored["whatsapp_delivery_status"] == "DELIVERED",
+        "request_id": stored["request_id"],
+        "request_created": stored["created"],
+        "status": stored["status"],
+        "country": preview["country"],
+        "language": language,
+        "escalation_recommended": preview["escalation_recommended"],
+        "escalation_reasons": preview["escalation_reasons"],
+        "whatsapp_delivery_status": stored["whatsapp_delivery_status"],
+        "alert_visible": stored["alert_visible"],
+        "next_action": "internal_notification_pending",
+        "spoken_message": creation_spoken_message(stored["request_id"], language),
+    }

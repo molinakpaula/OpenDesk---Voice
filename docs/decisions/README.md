@@ -13,3 +13,4 @@ from code.
 | [004](004-caller-first-conversation.md) | Use a caller-ID-first conversation |
 | [005](005-json-before-database.md) | Use validated JSON before adding a database |
 | [006](006-python-translations.md) | Keep initial translations in Python |
+| [007](007-separate-order-intake-agent.md) | Use a separate after-hours order-intake agent |

@@ -10,3 +10,6 @@
 # Python-generated cache files
 __pycache__/
 *.py[cod]
+
+# Local order-intake database and other runtime records
+.data/

@@ -8,10 +8,25 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config" / "maderaflow.json"
+ORDER_INTAKE_CONFIG_PATH = PROJECT_ROOT / "config" / "order_intake.json"
 APP_ENV = os.getenv("APP_ENV", "development")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 MADERAFLOW_TOOL_TOKEN = os.getenv("MADERAFLOW_TOOL_TOKEN")
+ORDER_INTAKE_ENABLED = os.getenv(
+    "ORDER_INTAKE_ENABLED",
+    "false",
+).casefold() == "true"
+ORDER_DATABASE_PATH = Path(
+    os.getenv(
+        "ORDER_DATABASE_PATH",
+        str(PROJECT_ROOT / ".data" / "order_requests.sqlite3"),
+    )
+)
+ORDER_REVIEWER_NAME = os.getenv("ORDER_REVIEWER_NAME", "responsible manager")
+ORDER_NOTIFICATION_WHATSAPP = os.getenv("ORDER_NOTIFICATION_WHATSAPP")
+PERU_INBOUND_NUMBER = os.getenv("PERU_INBOUND_NUMBER")
+GERMANY_INBOUND_NUMBER = os.getenv("GERMANY_INBOUND_NUMBER")
 
 SUPPORTED_CALLER_TYPES = {"buyer", "supplier", "transport_partner"}
 SUPPORTED_LANGUAGE_CODES = {"en", "es", "pt"}
@@ -110,6 +125,47 @@ def load_configuration() -> dict[str, Any]:
     return configuration
 
 
+def load_order_intake_configuration() -> dict[str, Any]:
+    """Load public order-intake rules without secrets or personal contacts."""
+    try:
+        with ORDER_INTAKE_CONFIG_PATH.open(encoding="utf-8") as config_file:
+            configuration = json.load(config_file)
+    except FileNotFoundError as error:
+        raise RuntimeError(
+            f"Order-intake configuration file not found: {ORDER_INTAKE_CONFIG_PATH}"
+        ) from error
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f"Order-intake configuration contains invalid JSON: {error}"
+        ) from error
+
+    required_sections = {
+        "organization",
+        "supported_languages",
+        "working_hours",
+        "order_rules",
+        "escalation_rules",
+    }
+    missing_sections = required_sections - configuration.keys()
+    if missing_sections:
+        missing = ", ".join(sorted(missing_sections))
+        raise RuntimeError(
+            f"Order-intake configuration is missing required sections: {missing}"
+        )
+
+    if set(configuration["supported_languages"]) != {"es", "de", "en"}:
+        raise RuntimeError("Order-intake languages must be exactly: de, en, es")
+
+    intervals = configuration["working_hours"].get("intervals", [])
+    if not intervals:
+        raise RuntimeError("Order-intake working hours need at least one interval")
+    for interval in intervals:
+        if set(interval) != {"opens_at", "closes_at"}:
+            raise RuntimeError("Every working-hours interval needs opens_at and closes_at")
+
+    return configuration
+
+
 CONFIG = load_configuration()
 ORGANIZATION = CONFIG["organization"]
 VOICE_AGENT = CONFIG["voice_agent"]
@@ -120,3 +176,4 @@ LOTS = CONFIG["lots"]
 TRANSPORTS = CONFIG["transports"]
 ESCALATION_TRIGGERS = CONFIG["escalation_triggers"]
 SUPPORT_HOURS = CONFIG["support_hours"]
+ORDER_INTAKE_CONFIG = load_order_intake_configuration()

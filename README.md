@@ -7,15 +7,48 @@
 A contextual multilingual voice-agent demonstration for wood drying and
 cross-border logistics support in English, Spanish, and Portuguese.
 
-> **Demonstration data:** Every caller profile, lot, measurement, transport,
-> and operational record in this repository is sample data. No real customer,
-> employee, shipment, supplier, or sensor data is used.
+> **Data boundary:** The MaderaFlow caller, lot, measurement, and transport
+> records are sample data. The new Maderera Las Garzas order-intake workflow is
+> based on a real business process, but this repository contains no customer
+> records, personal WhatsApp number, tax number, transcript, or API secret.
 
 **[Try the voice agent](https://elevenlabs.io/app/talk-to?agent_id=agent_2401kzxk9b7mf3jr3hw5dgcgsjtr&branch_id=agtbrch_3301kzxk9d3jf708fct42bcd8sfx)** ·
 **[Explore the live API](https://maderaflow-voice-support.onrender.com/docs)** ·
 **[Read the architecture](docs/architecture.md)** ·
 **[Open the reviewer checklist](docs/reviewer-demo-checklist.md)** ·
 **[Record the demo](docs/demo-video-script.md)**
+
+## New milestone: after-hours order intake
+
+The repository now contains the first backend milestone for a separate
+**Maderera Las Garzas** order-intake voice agent. It is intended to receive
+after-hours enquiries from Peru and Germany, work in Spanish, German, or
+English, collect quotation context, confirm it verbally, and create a pending
+request for human review.
+
+This is deliberately separate from the MaderaFlow lot-status agent:
+
+| Workflow | Purpose | Endpoint |
+| --- | --- | --- |
+| MaderaFlow support demo | Retrieve role-scoped sample lot information | `POST /support-requests` |
+| Maderera Las Garzas order intake | Validate and save a new quotation or callback request | `POST /order-requests` |
+
+The order workflow currently provides:
+
+- country and opening-language inference from `+51` and `+49` phone context;
+- Spanish, German, and English questions kept in Python;
+- a no-transcript callback path when the caller declines retention;
+- conditional questions for Peruvian domestic logistics and German exports;
+- human-review triggers for unusual species, moisture, deadlines, volume,
+  complaints, payments, reservations, and complex export questions;
+- idempotent `MLG-PE-...` and `MLG-DE-...` request numbers; and
+- local SQLite storage ignored by Git.
+
+The API does **not** yet send WhatsApp messages or ingest ElevenLabs post-call
+transcripts. It returns a visible pending notification state and never claims
+delivery. Production order intake is disabled by default on Render until
+durable storage, retention controls, WhatsApp delivery, and privacy review are
+configured. See the [new ElevenLabs configuration](docs/elevenlabs-agent-configuration.md).
 
 MaderaFlow represents a demonstration company headquartered in Puerto Maldonado,
 Peru. It coordinates wood drying and cross-border logistics for suppliers,
@@ -323,10 +356,18 @@ quality problem. This is a support-routing signal, not an admission of liability
   caller, lot, and transport assignments.
 - `maderaflow/support.py` owns role disclosure, intent inference, escalation,
   translations, and voice-ready messages.
+- `maderaflow/order_intake.py` owns Spanish/German/English order questions,
+  conditional requirements, phone-country inference, escalation, and human
+  notification formatting.
+- `maderaflow/order_storage.py` creates idempotent request IDs and stores local
+  development records in SQLite without adding another Python dependency.
 - `config/maderaflow.json` contains editable demonstration organization, caller,
   wood-type, drying-status, lot, transport, escalation, and support-hours data.
   Keeping these facts outside Python makes the context configurable without
   changing application logic.
+- `config/order_intake.json` contains public business capabilities, working
+  hours, capacities, and order-review rules. Personal contacts and secrets are
+  intentionally excluded.
 - `docs/elevenlabs-integration-contract.md` documents the voice webhook tool,
   conversation flow, safety rules, and multilingual examples for reviewers.
 - `docs/reviewer-demo-checklist.md` provides repeatable end-to-end voice,
@@ -342,6 +383,9 @@ quality problem. This is a support-routing signal, not an admission of liability
   content, escalation, and confidentiality boundaries.
 - `tests/test_architecture.py` protects the thin entry point, expected module
   structure, framework-independent configuration, and decision records.
+- `tests/test_order_intake.py` covers Peru/Germany routing, three order
+  languages, consent refusal, callback-only storage, German and Spanish order
+  creation, idempotency, conditional questions, and escalation rules.
 - `.github/workflows/tests.yml` repeats the full suite on Python 3.11, 3.12,
   and 3.13 for every push to `main` and every pull request.
 - `requirements.txt` pins FastAPI, Uvicorn, and timezone data needed to reproduce

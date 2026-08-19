@@ -1,0 +1,83 @@
+{
+  "organization": {
+    "name": "Maderera Las Garzas",
+    "location": "Puerto Maldonado, Madre de Dios, Peru",
+    "operating_since": 1996,
+    "services": [
+      "sawn_wood",
+      "industrial_kiln_drying"
+    ],
+    "excluded_products": [
+      "furniture",
+      "doors",
+      "windows",
+      "finished_products"
+    ],
+    "drying_capacity": {
+      "chambers": 3,
+      "cubic_metres_per_chamber": 110,
+      "total_cubic_metres": 330,
+      "availability_requires_human_confirmation": true
+    },
+    "usual_drying": {
+      "target_moisture_percentage_min": 10,
+      "target_moisture_percentage_max": 12,
+      "estimated_duration_days_min": 20,
+      "estimated_duration_days_max": 25,
+      "estimate_is_not_a_guarantee": true
+    },
+    "known_species": [
+      {
+        "common_name": "Tornillo",
+        "scientific_name": "Cedrelinga cateniformis"
+      },
+      {
+        "common_name": "Misa",
+        "scientific_name": "Couratari guianensis"
+      }
+    ]
+  },
+  "supported_languages": {
+    "es": "Spanish",
+    "de": "German",
+    "en": "English"
+  },
+  "working_hours": {
+    "timezone": "America/Lima",
+    "working_days": [0, 1, 2, 3, 4],
+    "intervals": [
+      {
+        "opens_at": "08:00",
+        "closes_at": "12:00"
+      },
+      {
+        "opens_at": "13:00",
+        "closes_at": "17:00"
+      }
+    ],
+    "holidays_modeled": false
+  },
+  "order_rules": {
+    "peru_country_code": "PE",
+    "germany_country_code": "DE",
+    "initial_status": "PENDIENTE_DE_REVISION",
+    "callback_status": "DEVOLUCION_DE_LLAMADA",
+    "maintain_original_units": true,
+    "human_confirms_price": true,
+    "human_confirms_availability": true,
+    "human_confirms_timing": true,
+    "human_confirms_export_conditions": true
+  },
+  "escalation_rules": {
+    "unknown_species": true,
+    "target_moisture_outside_usual_range": true,
+    "required_in_less_than_days": 20,
+    "volume_above_cubic_metres": 330,
+    "complaint": true,
+    "definitive_price_or_discount": true,
+    "chamber_reservation": true,
+    "confirmation_or_payment": true,
+    "complex_export_or_documentation_question": true,
+    "agent_did_not_understand": true
+  }
+}

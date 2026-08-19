@@ -11,6 +11,11 @@ selection, and escalation decisions.
 All records in this repository are sample data. The system is not connected to
 live customers, measurements, ticketing, telephony, or logistics systems.
 
+The repository also contains an isolated first milestone for a Maderera Las
+Garzas after-hours order-intake agent. It is based on a real workflow but is
+disabled in production until durable storage and notification delivery exist.
+No real order or contact record is committed to source control.
+
 ## System context
 
 ```mermaid
@@ -63,6 +68,37 @@ does not identify one unique record.
 | Support service | Infer intent, apply role disclosure, translate responses, calculate escalation | Access external services |
 | Configuration layer | Load and validate sample records and foreign-key-style references | Store secrets or real customer data |
 
+## After-hours order-intake subsystem
+
+```mermaid
+flowchart LR
+    Caller[Peru or Germany caller]
+    Phone[Inbound number and time routing]
+    Agent[Separate ElevenLabs order agent]
+    Orders[POST /order-requests]
+    Rules[Conditional intake and escalation]
+    Store[(Local SQLite milestone)]
+    Outbox[Pending WhatsApp notification]
+
+    Caller --> Phone
+    Phone -->|outside working hours| Agent
+    Agent -->|confirmed structured request| Orders
+    Orders --> Rules
+    Rules --> Store
+    Store --> Outbox
+```
+
+`conversation_id` is an idempotency key: repeating the same webhook request
+returns the existing request number instead of creating a duplicate. The local
+SQLite repository demonstrates transactions and sequencing without another
+package. It is not durable on a free Render filesystem and must be replaced by
+managed storage or attached to a persistent disk before real calls are enabled.
+
+WhatsApp uses an outbox boundary. Saving an order and delivering a notification
+are different events, so the API reports both honestly. A request is not marked
+processed until delivery is confirmed or a visible delivery-failure alert
+exists.
+
 ## Code structure
 
 ```text
@@ -74,8 +110,12 @@ maderaflow/
     errors.py                   Framework-independent domain errors
     repositories.py             Identifier and assignment lookup
     support.py                  Business rules and multilingual responses
+    order_intake.py             Multilingual order rules and escalation
+    order_storage.py            Idempotent SQLite request persistence
 config/maderaflow.json          Editable sample business records
+config/order_intake.json        Public order-intake rules without secrets
 tests/test_main.py              HTTP and architecture regression tests
+tests/test_order_intake.py      Order-intake and privacy regression tests
 ```
 
 Dependencies point inward: `api` calls `support` and `repositories`; those
