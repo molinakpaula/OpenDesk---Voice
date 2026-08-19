@@ -16,3 +16,15 @@ services:
         value: https://maderaflow-voice-support.onrender.com
       - key: MADERAFLOW_TOOL_TOKEN
         sync: false
+      # Fail closed until durable storage, retention, and notification delivery
+      # are configured for real customer information.
+      - key: ORDER_INTAKE_ENABLED
+        value: "false"
+      - key: ORDER_REVIEWER_NAME
+        sync: false
+      - key: PERU_INBOUND_NUMBER
+        sync: false
+      - key: GERMANY_INBOUND_NUMBER
+        sync: false
+      - key: ORDER_NOTIFICATION_WHATSAPP
+        sync: false
